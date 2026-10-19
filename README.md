@@ -29,7 +29,7 @@ ProCad nace en el aula: la idea es que un alumno que **nunca diseñó una placa*
 ### Opción 1 — Desde internet (lo más fácil)
 Entrá a este enlace y empezá a diseñar:
 
-👉 **[Abrir ProCad](https://ENLACE-DE-VERCEL-AQUI)**
+👉 **[Abrir ProCad](https://procad-nine.vercel.app/)**
 
 ### Opción 2 — Sin internet
 1. Descargá este repositorio con el botón verde **"<> Code" → "Download ZIP"**.
