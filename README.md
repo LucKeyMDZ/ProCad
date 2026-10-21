@@ -51,6 +51,16 @@ Entrá a este enlace y empezá a diseñar:
 
 ---
 
+## 🆕 Novedades (20/10/2026)
+
+- 🔩 **Orientación de las borneras:** ahora el símbolo y la huella de las borneras tienen una flechita/muesca que marca el lado por donde entran los cables (y se atornillan). Sirve para girarlas en la placa y que los tornillos queden accesibles desde afuera.
+- 🚫 **No se solapan componentes en la placa:** al armar la placa (paso 2), ya no se puede arrastrar ni girar un componente hasta dejarlo montado arriba de otro, porque eso no se puede hacer en la vida real.
+- 🏷️ **Etiquetas de red:** nuevo componente "Etiqueta de red" para el esquemático. Poniendo dos etiquetas con el mismo nombre en distintos puntos, el programa los da por conectados sin necesidad de dibujar el cable entre ellos (igual que ya pasaba con Positivo y Masa).
+- 🔦 **Resaltado cruzado esquemático ↔ placa:** como en Proteus. Elegís un componente, un cable o una pista y tocás "Resaltar en la Placa" (o "Resaltar en el Esquemático") para encontrarlo al toque del otro lado.
+- 📱 **Mejor en celular y tablet:** se ajustó el diseño para que la pantalla se acomode mejor, incluido el celular en horizontal.
+
+---
+
 ## 🗺️ Estado del proyecto
 
 ProCad está en etapa de **prototipo** 🧪. Ya se puede usar para practicar y se le van a ir agregando funciones nuevas a partir de las pruebas con alumnos.
