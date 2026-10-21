@@ -4,29 +4,32 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-/* Diseño: mesa de trabajo de taller. Arranca en modo oscuro; el botón del sol pasa a modo claro. Paneles grafito, acento cobre,
+/* Diseño: mesa de trabajo de taller. Arranca en modo oscuro; el botón del sol pasa a modo claro. Base verde-carbón casi negra,
+   dos colores de marca con un trabajo cada uno (accent = acción primaria y paso activo, select = selección/conexión),
    la placa siempre en verde máscara. Lienzo grande al centro, herramientas a los lados.
-   Contraste de los textos (WCAG): letra 13:1, texto secundario 6:1, acento 6:1. */
+   Contraste de los textos (WCAG): letra 13:1, texto secundario 9:1, acento 9:1. */
 :root {
-  --bg: #121815; --panel: #19211d; --panel-2: #202924; --line: #36443d; --fg: #e4ebe7; --muted: #95a59c;
-  --accent: #e0864a; --accent-fg: #1a0f08; --accent-soft: #3a2619; --select: #5c9bff;
-  --ok: #45c47a; --warn: #f0a63a; --err: #ff6b6b; --todo: #e2c43c;
-  --sch-bg: #0f1512; --sch-grid: #303d37; --sch-sym: #f08a7c; --sch-wire: #5fd18a; --sch-text: #9db8ff; --sch-muted: #9aa8a0; --pin-free: #ff6b6b;
-  --pcb-bg: #0e1411; --pcb-grid: #2b3631; --pcb-label: #b9c7c0; --view3d-bg: #1b2320;
-  --tip-bg: #e4ebe7; --tip-fg: #121815;
+  --bg: #0c1511; --panel: #121d17; --panel-2: #1a2821; --line: #2d4238; --fg: #eef4ef; --muted: #93aa9c;
+  --accent: #ff8a3d; --accent-fg: #1a0d04; --accent-soft: #3d2615; --select: #4fc3ff;
+  --ok: #36d399; --warn: #ffc53d; --err: #ff5c6b; --todo: #f4d93f;
+  --sch-bg: #0a120e; --sch-grid: #263a30; --sch-sym: #ff8f7a; --sch-wire: #52e39e; --sch-text: #8fb8ff; --sch-muted: #9fb3a8; --pin-free: #ff5c6b;
+  --pcb-bg: #0a120e; --pcb-grid: #263a30; --pcb-label: #c3d2c9; --view3d-bg: #182620;
+  --tip-bg: #eef4ef; --tip-fg: #0c1511;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.25); --shadow-md: 0 20px 60px rgba(0,0,0,.45); --shadow-toast: 0 8px 26px rgba(0,0,0,.4);
   --font-ui: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
   --r: 8px;
   color-scheme: dark;
 }
-/* modo claro (botón del sol): mismos nombres de color, valores claros. Contraste de textos 4,6:1 o más */
+/* modo claro (botón del sol): mismos nombres de color, recalibrados para una sala con luz de día. Contraste de textos 4,5:1 o más */
 :root.pc-light {
-  --bg: #e9eeea; --panel: #f7f9f7; --panel-2: #eef2ef; --line: #c4cec7; --fg: #17211b; --muted: #526158;
-  --accent: #a84a14; --accent-fg: #ffffff; --accent-soft: #f6e4d7; --select: #2563d9;
-  --ok: #1a7a43; --warn: #8f5a00; --err: #c02f2f; --todo: #a88a0c;
-  --sch-bg: #fbfcfa; --sch-grid: #c9d3cc; --sch-sym: #8c1f1f; --sch-wire: #1e7a40; --sch-text: #1f3a8a; --sch-muted: #4d5a52; --pin-free: #c02f2f;
-  --pcb-bg: #18201c; --pcb-grid: #33403a; --pcb-label: #c9d6cf; --view3d-bg: #c9d3cd;
-  --tip-bg: #17211b; --tip-fg: #f4f7f5;
+  --bg: #eef2ec; --panel: #fafcf8; --panel-2: #eef2ee; --line: #c6d1c7; --fg: #142019; --muted: #4c5e53;
+  --accent: #c1500d; --accent-fg: #ffffff; --accent-soft: #fbe6d2; --select: #0a6ba3;
+  --ok: #157a4c; --warn: #8a5c00; --err: #b4262a; --todo: #8a6c06;
+  --sch-bg: #fbfcfa; --sch-grid: #c9d3cc; --sch-sym: #93241f; --sch-wire: #157a40; --sch-text: #1f49a8; --sch-muted: #4d5c53; --pin-free: #b4262a;
+  --pcb-bg: #18221c; --pcb-grid: #34453b; --pcb-label: #cdd8d0; --view3d-bg: #c7d1cb;
+  --tip-bg: #142019; --tip-fg: #f4f7f4;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.12); --shadow-md: 0 20px 60px rgba(0,0,0,.18); --shadow-toast: 0 8px 26px rgba(0,0,0,.2);
   color-scheme: light;
 }
 
@@ -58,7 +61,7 @@ button { cursor: pointer; }
 .btn:hover { background: var(--panel-2); }
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
-.btn.primary:hover { filter: brightness(1.06); }
+.btn.primary:hover { box-shadow: var(--shadow-sm); }
 .btn.ghost { border-color: transparent; background: transparent; }
 .btn.ghost:hover { background: var(--panel-2); }
 .btn svg { width: 16px; height: 16px; flex: none; }
@@ -141,7 +144,7 @@ button { cursor: pointer; }
 
 /* ventanas */
 .modal { position: fixed; inset: 0; background: rgba(10, 16, 13, .55); display: grid; place-items: center; z-index: 50; padding: 16px; }
-.dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(640px, 100%); max-height: calc(100% - 20px); overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.dialog { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(640px, 100%); max-height: calc(100% - 20px); overflow: auto; box-shadow: var(--shadow-md); }
 .dialog header { padding: 20px 22px 8px; }
 .dialog header h2 { margin: 0; font-size: 22px; text-wrap: balance; }
 .dialog header p { margin: 6px 0 0; color: var(--muted); line-height: 1.45; }
@@ -162,15 +165,15 @@ button { cursor: pointer; }
 .school img { width: 84px; height: 84px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
 .school span { color: var(--muted); font-size: 13px; }
 @media (max-width: 860px) { .credit { display: none; } }
-.toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); background: var(--tip-bg); color: var(--tip-fg); padding: 10px 16px; border-radius: 9px; z-index: 60; max-width: 560px; font-size: 13.5px; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
+.toast { position: fixed; left: 16px; right: 16px; margin: 0 auto; width: fit-content; bottom: calc(52px + env(safe-area-inset-bottom, 0px)); background: var(--tip-bg); color: var(--tip-fg); padding: 10px 16px; border-radius: 9px; z-index: 60; max-width: 560px; font-size: 13.5px; box-shadow: var(--shadow-toast); }
 
-.toolbar { position: absolute; left: 12px; top: 12px; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.toolbar { position: absolute; left: 12px; top: 12px; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; box-shadow: var(--shadow-sm); }
 .tbtn { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; border-radius: 7px; padding: 6px 10px; font-weight: 700; color: var(--muted); }
 .tbtn svg { width: 18px; height: 18px; }
 .tbtn:hover { color: var(--fg); background: var(--panel-2); }
 .tbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--fg); box-shadow: inset 0 0 0 1px var(--accent); }
 .floating { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 6px; }
-.floating .btn { background: var(--panel); box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.floating .btn { background: var(--panel); box-shadow: var(--shadow-sm); }
 .legend3d { position: absolute; left: 12px; bottom: 12px; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; color: var(--muted); }
 
 /* lista de materiales */
