@@ -276,6 +276,19 @@ table.bom { width: 100%; border-collapse: collapse; font-size: 13px; }
   .welcome-steps { grid-template-columns: 1fr; }
   .act-label { display: none; }
 }
+/* celular acostado: hay poca altura pero bastante ancho, así que conviene volver a los paneles lado a lado (más angostos) en vez de apilarlos */
+@media (max-width: 860px) and (max-height: 480px) {
+  body { overflow: hidden; }
+  .app { height: 100%; min-height: 0; }
+  .main, .main.no-right { grid-template-columns: 170px 1fr 210px; grid-template-rows: minmax(0, 1fr); }
+  .main.no-right { grid-template-columns: 170px 1fr; }
+  .stage { grid-row: auto; height: auto; }
+  .side.left { grid-row: auto; border-right: 1px solid var(--line); border-top: 0; font-size: 12.5px; }
+  .side.right { grid-row: auto; border-left: 1px solid var(--line); border-top: 0; font-size: 12.5px; }
+  .parts { grid-template-columns: 1fr; }
+  .steps { order: 0; width: auto; margin-inline: auto; }
+  .step { flex: none; }
+}
 @media (prefers-reduced-motion: reduce) { .progress i { transition: none; } }
 </style>
 
@@ -498,6 +511,10 @@ function pinText(ctx, t, x, y, align) {
   ctx.save(); ctx.fillStyle = ctx.strokeStyle; ctx.font = '7px sans-serif';
   ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y); ctx.restore();
 }
+// flechita en el símbolo de una bornera, del lado contrario a las patas: marca por dónde se atornillan/entran los cables
+function screwSideArrow(ctx) { poly(ctx, [4, -4, 10, 0, 4, 4], true); }
+// muesca en la huella (vista técnica) de una bornera: marca el mismo lado; girala en la placa para que apunte hacia el borde (afuera)
+function screwSideNotch(ctx) { L(ctx, -1.4, 4.2, 0, 2.2, 1.4, 4.2); }
 
 /* ---------- ayudas de dibujo real (vista desde arriba, en mm) ---------- */
 function rrect(ctx, x0, y0, x1, y1, r) {
@@ -853,16 +870,17 @@ const PARTS = {
 
   J2: {
     name: 'Bornera 2 pines', cat: 'Conectores', prefix: 'J', value: 'Bornera',
-    hint: 'Para atornillar cables (alimentación, salidas).',
+    hint: 'Para atornillar cables (alimentación, salidas). La flecha marca el lado por donde entran los cables: en la placa, giralo para que apunte hacia el borde (afuera), así los tornillos quedan accesibles.',
     pins: [{ n: '1', x: -30, y: -10 }, { n: '2', x: -30, y: 10 }],
     bb: [-30, -20, 10, 20],
     sym(ctx) {
       ctx.strokeRect(-10, -20, 20, 40); L(ctx, -30, -10, -10, -10); L(ctx, -30, 10, -10, 10);
       circ(ctx, 0, -10, 4); circ(ctx, 0, 10, 4);
+      screwSideArrow(ctx);
     },
     fp: {
       pads: [P('1', -2.54, 0, 2.6, 1.2, true), P('2', 2.54, 0, 2.6, 1.2)], box: [-5.4, -4.6, 5.4, 4.6],
-      silk(ctx) { ctx.strokeRect(-5.1, -4.2, 10.2, 8.4); },
+      silk(ctx) { ctx.strokeRect(-5.1, -4.2, 10.2, 8.4); screwSideNotch(ctx); },
       real(ctx) {
         fillR(ctx, -5.1, -4.2, 5.1, 4.2, 0.4, '#2c7fbf'); shade(ctx, -5.1, -4.2, 5.1, 4.2);
         [-2.54, 2.54].forEach(x => {
@@ -917,10 +935,18 @@ const PARTS = {
     pins: [{ n: '1', x: 0, y: 0 }],
     bb: [-10, 0, 10, 19],
     sym(ctx) { L(ctx, 0, 0, 0, 10); L(ctx, -10, 10, 10, 10); L(ctx, -6, 14, 6, 14); L(ctx, -2, 18, 2, 18); }
+  },
+
+  LABEL: {
+    name: 'Etiqueta de red', cat: 'Etiquetas', prefix: '#NET', value: 'N1', power: true, isLabel: true,
+    hint: 'Para unir dos puntos sin dibujar el cable entre ellos: ponés una en cada punto y les escribís el mismo nombre. El programa los conecta solos, igual que con VCC o GND.',
+    pins: [{ n: '1', x: 0, y: 0 }],
+    bb: [-1, -7, 31, 7],
+    sym(ctx) { L(ctx, 0, 0, 10, 0); poly(ctx, [10, 0, 16, -6, 30, -6, 30, 6, 16, 6]); }
   }
 };
 
-const CATEGORIES = ['Pasivos', 'Semiconductores', 'Integrados', 'Electromecánicos', 'Conectores', 'Alimentación'];
+const CATEGORIES = ['Pasivos', 'Semiconductores', 'Integrados', 'Electromecánicos', 'Conectores', 'Alimentación', 'Etiquetas'];
 
 /* =====================================================================
    ProCad — Librería ampliada
@@ -1070,15 +1096,16 @@ function terminalPart(n) {
   const hh = n * 10, w = n * 5.08 / 2;
   return {
     name: `Bornera ${n} pines`, cat: 'Conectores', prefix: 'J', value: 'Bornera',
-    hint: 'Para atornillar cables (alimentación, salidas, sensores).',
+    hint: 'Para atornillar cables (alimentación, salidas, sensores). La flecha marca el lado por donde entran los cables: en la placa, giralo para que apunte hacia el borde (afuera), así los tornillos quedan accesibles.',
     pins, bb: [-30, -hh, 10, hh],
     sym(ctx) {
       ctx.strokeRect(-10, -hh, 20, hh * 2);
       pins.forEach(p => { L(ctx, -30, p.y, -10, p.y); circ(ctx, 0, p.y, 4); });
+      screwSideArrow(ctx);
     },
     fp: {
       pads, box: [-w - 0.3, -4.6, w + 0.3, 4.6],
-      silk(ctx) { ctx.strokeRect(-w, -4.2, w * 2, 8.4); },
+      silk(ctx) { ctx.strokeRect(-w, -4.2, w * 2, 8.4); screwSideNotch(ctx); },
       real(ctx) {
         fillR(ctx, -w, -4.2, w, 4.2, 0.4, '#2c7fbf'); shade(ctx, -w, -4.2, w, 4.2);
         pads.forEach(p => {
@@ -2542,11 +2569,24 @@ function padPos(c, pad) {
   const [x, y] = rotPt(pad.x, pad.y, c.pr);
   return [c.px + x, c.py + y];
 }
-function fpBox(c) {
-  const b = partOf(c).fp.box;
-  const pts = [rotPt(b[0], b[1], c.pr), rotPt(b[2], b[3], c.pr)];
-  return [c.px + Math.min(pts[0][0], pts[1][0]), c.py + Math.min(pts[0][1], pts[1][1]),
-  c.px + Math.max(pts[0][0], pts[1][0]), c.py + Math.max(pts[0][1], pts[1][1])];
+function fpBox(c) { return fpBoxAt(partOf(c), c.px, c.py, c.pr); }
+// bbox hipotético de una huella parada en (px,py) con rotación pr, sin tocar el documento (para probar antes de mover/girar)
+function fpBoxAt(part, px, py, pr) {
+  const b = part.fp.box;
+  const pts = [rotPt(b[0], b[1], pr), rotPt(b[2], b[3], pr)];
+  return [px + Math.min(pts[0][0], pts[1][0]), py + Math.min(pts[0][1], pts[1][1]),
+  px + Math.max(pts[0][0], pts[1][0]), py + Math.max(pts[0][1], pts[1][1])];
+}
+// ¿esa huella se superpone con la de algún otro componente ya ubicado en la placa (o en la bandeja)?
+function overlapsOtherFp(bbox, excludeIds) {
+  const ex = excludeIds instanceof Set ? excludeIds : new Set(excludeIds ? [excludeIds] : []);
+  return Store.doc.comps.some(c => !ex.has(c.id) && c.px !== null && partOf(c).fp && bboxOverlap(bbox, fpBox(c)));
+}
+// ¿el componente ya está ubicado adentro del rectángulo de la placa (y no todavía esperando en la bandeja)?
+function compOnBoard(c) {
+  if (c.px === null || !partOf(c).fp) return false;
+  const B = Store.doc.board, b = fpBox(c);
+  return b[0] >= B.x - 0.01 && b[1] >= B.y - 0.01 && b[2] <= B.x + B.w + 0.01 && b[3] <= B.y + B.h + 0.01;
 }
 
 /* ---------- unión de conjuntos (para redes y conexiones) ---------- */
@@ -2593,15 +2633,19 @@ function netlist() {
     const g = groups.get(r); g.keys.push(k);
     if (partOf(c).power) g.power = c.value;
   }));
-  const nets = [], netOf = new Map();
+  const nets = [], netOf = new Map(), netByRoot = new Map();
   let i = 1;
-  groups.forEach(g => {
+  groups.forEach((g, r) => {
     const physical = g.keys.filter(k => !partOf(compById(k.split(':')[0])).power);
     const net = { id: nets.length, name: g.power ? g.power : 'N' + (i++), keys: g.keys, pins: physical, power: !!g.power };
     nets.push(net);
     g.keys.forEach(k => netOf.set(k, net.id));
+    netByRoot.set(r, net.id);
   });
-  return { nets, netOf };
+  // a qué red pertenece cada cable (para el resaltado cruzado con la placa: un cable puede no tocar ningún pin directamente)
+  const netOfWire = new Map();
+  d.wires.forEach(w => { const r = uf.find('w:' + w.id); if (netByRoot.has(r)) netOfWire.set(w.id, netByRoot.get(r)); });
+  return { nets, netOf, netOfWire };
 }
 
 /* ---------- geometría ---------- */
@@ -2853,7 +2897,7 @@ class SchEditor {
     this.tool = 'select';          // 'select' o 'wire'
     this.placePart = null; this.placeRot = 0;
     this.draft = null;             // cable que se está dibujando
-    this.sel = null; this.hover = null;
+    this.sel = null; this.hover = null; this.highlightNet = null; this.focus = null;
     this.mouse = [0, 0]; this.mouseS = [0, 0];
     this.bind(canvas);
   }
@@ -2926,7 +2970,35 @@ class SchEditor {
     });
     this.app.onSelect();
   }
-  select(s) { this.sel = s; this.app.onSelect(); this.draw(); }
+  select(s) { this.sel = s; this.highlightNet = null; this.app.onSelect(); this.draw(); }
+  // ancla la vista sobre un punto y lo marca con un anillo que titila un rato (para el resaltado cruzado con la placa)
+  focusOn(at) {
+    this.focus = { at, t: performance.now() };
+    const [sx, sy] = this.v.toScreen(at[0], at[1]);
+    if (sx < 40 || sy < 40 || sx > this.v.w - 40 || sy > this.v.h - 40) {
+      this.v.tx += this.v.w / 2 - sx; this.v.ty += this.v.h / 2 - sy;
+    }
+    this.draw();
+  }
+  // Resaltado cruzado: marca en el esquemático el componente que se eligió en la placa
+  highlightComp(id) {
+    const c = compById(id); if (!c) return false;
+    this.select({ type: 'comp', id });
+    this.focusOn([c.x, c.y]);
+    return true;
+  }
+  // Resaltado cruzado: marca en el esquemático todo lo que pertenece a la red que se eligió en la placa (una pista o un pad)
+  highlightNetId(netId) {
+    const nl = netlist(), comps = [], wires = [];
+    Store.doc.comps.forEach(c => { if (partOf(c).pins.some(p => nl.netOf.get(c.id + ':' + p.n) === netId)) comps.push(c.id); });
+    Store.doc.wires.forEach(w => { if (nl.netOfWire.get(w.id) === netId) wires.push(w.id); });
+    if (!comps.length && !wires.length) return false;
+    this.setSelection(comps, wires);
+    this.highlightNet = netId;
+    const at = comps.length ? [compById(comps[0]).x, compById(comps[0]).y] : wirePath(Store.doc.wires.find(w => w.id === wires[0]))[0];
+    this.focusOn(at);
+    return true;
+  }
 
   /* ---------- selección de varios ---------- */
   selComps() { const s = this.sel; return !s ? [] : s.type === 'comp' ? [s.id] : s.type === 'multi' ? s.comps : []; }
@@ -3422,6 +3494,14 @@ class SchEditor {
       if (c && !partOf(c).power) drawTip(v.screenCtx(), this.mouseS[0], this.mouseS[1], pinLabel(c, h.p), v);
     } else if (h && h.type === 'wire' && (this.draft || this.tool === 'wire')) {
       drawTip(v.screenCtx(), this.mouseS[0], this.mouseS[1], this.draft ? 'Unir a este cable' : 'Empezar desde este cable', v);
+    }
+
+    // anillo que titila sobre lo que se resaltó desde la placa
+    if (this.focus && performance.now() - this.focus.t < 2200) {
+      const k = (performance.now() - this.focus.t) / 2200, z = 1 / v.z;
+      ctx.strokeStyle = P.accent; ctx.lineWidth = Math.max(0.8, 3 * z);
+      ctx.beginPath(); ctx.arc(this.focus.at[0], this.focus.at[1], Math.max(4, 22 * z) * (1 + 0.4 * Math.sin(k * 12)), 0, 7); ctx.stroke();
+      this.draw();
     }
   }
 
@@ -3945,7 +4025,7 @@ class PcbEditor {
     this.v = new CanvasView(canvas, 8);
     this.v.onResize = () => this.draw();
     this.tool = 'move'; this.view = 'tech'; this.showRats = true; this.diagFirst = false; this.guard = true; this.block90 = true;
-    this.sel = null; this.hover = null; this.cur = null; this.focus = null;
+    this.sel = null; this.hover = null; this.cur = null; this.focus = null; this.highlightNet = null;
     this.mouse = [0, 0]; this.mouseS = [0, 0];
     this.A = null;
     this.bind(canvas);
@@ -3967,11 +4047,22 @@ class PcbEditor {
   rotateSel() {
     if (this.sel && this.sel.type === 'multi') {
       const cs = new Set(this.sel.comps), ts = new Set(this.sel.texts);
+      for (const id of cs) {
+        const c = compById(id); if (!c) continue;
+        if (overlapsOtherFp(fpBoxAt(partOf(c), c.px, c.py, (c.pr + 1) % 4), id)) {
+          this.app.toast('No se puede girar: algún componente quedaría encima de otro.'); return;
+        }
+      }
       Store.change(d => { d.comps.forEach(c => { if (cs.has(c.id)) c.pr = (c.pr + 1) % 4; }); d.texts.forEach(t => { if (ts.has(t.id)) t.rot = (t.rot + 1) % 4; }); }, 'pcb');
       return;
     }
-    if (this.sel && this.sel.type === 'comp')
+    if (this.sel && this.sel.type === 'comp') {
+      const c0 = compById(this.sel.id);
+      if (c0 && overlapsOtherFp(fpBoxAt(partOf(c0), c0.px, c0.py, (c0.pr + 1) % 4), c0.id)) {
+        this.app.toast('No se puede girar: quedaría encima de otro componente.'); return;
+      }
       Store.change(d => { const c = d.comps.find(c => c.id === this.sel.id); c.pr = (c.pr + 1) % 4; }, 'pcb');
+    }
     else if (this.sel && this.sel.type === 'text')
       Store.change(d => { const t = d.texts.find(t => t.id === this.sel.id); if (t) t.rot = (t.rot + 1) % 4; }, 'pcb');
   }
@@ -3997,7 +4088,26 @@ class PcbEditor {
       this.app.toast('Los componentes se borran desde el esquemático (paso 1).');
     }
   }
-  select(s) { this.sel = s; this.app.onSelect(); this.draw(); }
+  select(s) { this.sel = s; this.highlightNet = null; this.app.onSelect(); this.draw(); }
+  // Resaltado cruzado: marca en la placa el componente que se eligió en el esquemático (si ya está ubicado ahí)
+  highlightComp(id) {
+    const c = compById(id); if (!c || !partOf(c).fp || c.px === null || !compOnBoard(c)) return false;
+    this.select({ type: 'comp', id });
+    this.focusOn([c.px, c.py]);
+    return true;
+  }
+  // Resaltado cruzado: marca en la placa (pads y pistas) todo lo que pertenece a la red que se eligió en el esquemático
+  highlightNetId(netId) {
+    const A = this.analyze(), cn = this.clusterNets(A);
+    const compIds = new Set(A.pads.filter(p => p.net === netId).map(p => p.c.id));
+    const trackIds = new Set(A.segs.filter(sg => { const ns = cn.get(sg.cl); return ns && ns.has(netId); }).map(sg => sg.t.id));
+    if (!compIds.size && !trackIds.size) return false;
+    this.setSelection({ comps: [...compIds], tracks: [...trackIds] });
+    this.highlightNet = netId;   // setSelection() (vía select()) lo había limpiado: se deja puesto después
+    const p0 = A.pads.find(p => p.net === netId);
+    if (p0) this.focusOn([p0.x, p0.y]);
+    return true;
+  }
 
   /* ---------- selección de varios ---------- */
   selOf(type) { const s = this.sel; return !s ? [] : s.type === type ? [s.id] : s.type === 'multi' ? (s[type + 's'] || []) : []; }
@@ -4272,8 +4382,16 @@ class PcbEditor {
       if (this.gdrag) {
         const g = this.gdrag, dx = snap(x - g.x0, pcbGrid()), dy = snap(y - g.y0, pcbGrid());
         if (dx !== g.dx || dy !== g.dy) {
-          if (!g.moved) { g.moved = true; Store.checkpoint(); }
-          g.dx = dx; g.dy = dy; this.groupMove(g, dx, dy); this.A = null; this.draw();
+          const groupIds = new Set(g.comps.map(([c]) => c.id));
+          const blocked = g.comps.some(([c, x0, y0]) => overlapsOtherFp(fpBoxAt(partOf(c), x0 + dx, y0 + dy, c.pr), groupIds));
+          g.blocked = blocked; cv.style.cursor = blocked ? 'not-allowed' : 'grabbing';
+          if (blocked) { if (!g.toasted) { g.toasted = true; this.app.toast('No se pueden superponer componentes en la placa. Ahí ya hay otro.'); } }
+          else {
+            g.toasted = false;
+            if (!g.moved) { g.moved = true; Store.checkpoint(); }
+            g.dx = dx; g.dy = dy; this.groupMove(g, dx, dy); this.A = null;
+          }
+          this.draw();
         }
         return;
       }
@@ -4298,8 +4416,15 @@ class PcbEditor {
         const c = compById(this.drag.id);
         const nx = snap(x - this.drag.ox, pcbGrid()), ny = snap(y - this.drag.oy, pcbGrid());
         if (c && (nx !== c.px || ny !== c.py)) {
-          if (!this.drag.moved) { this.drag.moved = true; Store.checkpoint(); }
-          c.px = nx; c.py = ny; this.A = null; this.draw();
+          const blocked = overlapsOtherFp(fpBoxAt(partOf(c), nx, ny, c.pr), c.id);
+          this.drag.blocked = blocked; cv.style.cursor = blocked ? 'not-allowed' : 'grabbing';
+          if (blocked) { if (!this.drag.toasted) { this.drag.toasted = true; this.app.toast('No se pueden superponer componentes en la placa. Ahí ya hay otro.'); } }
+          else {
+            this.drag.toasted = false;
+            if (!this.drag.moved) { this.drag.moved = true; Store.checkpoint(); }
+            c.px = nx; c.py = ny; this.A = null;
+          }
+          this.draw();
         }
         return;
       }
@@ -4405,7 +4530,8 @@ class PcbEditor {
     }
 
     // pistas
-    const hovNet = this.cur && this.cur.net !== undefined ? this.cur.net : this.hover && this.hover.type === 'pad' ? this.hover.p.net : null;
+    const hovNet = this.highlightNet !== null && this.highlightNet !== undefined ? this.highlightNet :
+      this.cur && this.cur.net !== undefined ? this.cur.net : this.hover && this.hover.type === 'pad' ? this.hover.p.net : null;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     d.tracks.forEach(t => {
       const sel = this.inSel('track', t.id);
@@ -4435,6 +4561,14 @@ class PcbEditor {
       else { ctx.strokeStyle = '#f2f2ee'; ctx.lineWidth = 0.18; part.fp.silk(ctx); }
       ctx.restore();
     });
+
+    // componentes que se están arrastrando o girando a un lugar ocupado: se marcan en rojo con una X
+    {
+      const badIds = new Set();
+      if (this.drag && this.drag.blocked) badIds.add(this.drag.id);
+      if (this.gdrag && this.gdrag.blocked) this.gdrag.comps.forEach(([c]) => badIds.add(c.id));
+      badIds.forEach(id => { const c = compById(id); if (c) this.markOverlap(ctx, fpBox(c), px1); });
+    }
 
     // puentes: el alambre va del lado de los componentes
     (d.jumpers || []).forEach(j => {
@@ -4561,6 +4695,15 @@ class PcbEditor {
   }
   strokePts(ctx, pts) {
     ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.stroke();
+  }
+  // marca en rojo con una X la huella que quedaría encima de otra
+  markOverlap(ctx, b, px1) {
+    const err = cssv('--err'), lw = Math.max(0.2, 2 * px1);
+    ctx.save();
+    ctx.globalAlpha = 0.3; ctx.fillStyle = err; ctx.fillRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+    ctx.globalAlpha = 1; ctx.strokeStyle = err; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.lineTo(b[2], b[3]); ctx.moveTo(b[2], b[1]); ctx.lineTo(b[0], b[3]); ctx.stroke();
+    ctx.restore();
   }
   focusOn(at) {
     this.focus = { at, t: performance.now() };
@@ -5661,6 +5804,40 @@ const App = {
     document.querySelectorAll('.tool[data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === this.pcb.tool)));
   },
   onSelect() { this.renderRight(); this.status(); },
+  // Resaltado cruzado (como en Proteus): lo que está elegido en un lado se marca en el otro, si ya existe ahí.
+  crossHighlight(dir) {
+    if (dir === 'pcb') {
+      const s = this.sch.sel;
+      if (s && s.type === 'comp') {
+        const c = compById(s.id);
+        if (!c || !partOf(c).fp) { this.toast('Ese elemento no tiene huella para la placa.'); return; }
+        if (!compOnBoard(c)) { this.toast(`${c.ref} todavía no está ubicado en la placa.`); return; }
+        this.setTab('pcb');
+        setTimeout(() => this.pcb.highlightComp(c.id), 0);
+      } else if (s && s.type === 'wire') {
+        const nl = netlist(), netId = nl.netOfWire.get(s.id);
+        if (netId === undefined) { this.toast('Ese cable no está conectado a nada.'); return; }
+        const A = this.pcb.analyze(), cn = this.pcb.clusterNets(A);
+        const onBoard = A.pads.some(p => p.net === netId) || A.segs.some(sg => { const ns = cn.get(sg.cl); return ns && ns.has(netId); });
+        if (!onBoard) { this.toast('Esa conexión todavía no está en la placa.'); return; }
+        this.setTab('pcb');
+        setTimeout(() => this.pcb.highlightNetId(netId), 0);
+      }
+    } else {
+      const s = this.pcb.sel;
+      if (s && s.type === 'comp') {
+        this.setTab('sch');
+        setTimeout(() => this.sch.highlightComp(s.id), 0);
+      } else if (s && s.type === 'track') {
+        const A = this.pcb.analyze(), cn = this.pcb.clusterNets(A);
+        const sg = A.segs.find(sg => sg.t.id === s.id), ns = sg && cn.get(sg.cl);
+        if (!ns || !ns.size) { this.toast('Esa pista todavía no está conectada a ningún componente.'); return; }
+        const netId = [...ns][0];
+        this.setTab('sch');
+        setTimeout(() => { if (!this.sch.highlightNetId(netId)) this.toast('Esa conexión no está en el esquemático.'); }, 0);
+      }
+    }
+  },
   focusText() { requestAnimationFrame(() => { const i = $('#propText'); if (i) { i.focus(); i.select(); } }); },
   focusValue() { const i = $('#propVal'); if (i) { i.focus(); if (i.select) i.select(); } },
 
@@ -5698,7 +5875,7 @@ const App = {
         html += `<div class="block"><div class="prop-title"><b>${esc(p.power ? c.value : c.ref)}</b><span>${esc(p.name)}</span></div>`;
         if (!p.power) html += `<label class="field">Nombre<input id="propRef" value="${esc(c.ref)}"></label>`;
         if (p.options) html += `<label class="field">${c.part === 'LED' ? 'Color' : 'Valor'}<select id="propVal">${p.options.map(o => `<option${o === c.value ? ' selected' : ''}>${o}</option>`).join('')}</select></label>`;
-        else if (c.part !== 'GND') html += `<label class="field">${p.power ? 'Nombre de la tensión' : 'Valor'}<input id="propVal" value="${esc(c.value)}"></label>`;
+        else if (c.part !== 'GND') html += `<label class="field">${p.isLabel ? 'Nombre de la etiqueta' : p.power ? 'Nombre de la tensión' : 'Valor'}<input id="propVal" value="${esc(c.value)}"></label>`;
         if (c.part === 'R' || c.part === 'RV') {
           const b = c.part === 'R' ? resistorBands(c.value) : null;
           if (c.part === 'R') html += b ? `<div class="bands">${b.map(x => `<i class="band" style="background:${x}" title="${BAND_NAMES[x] || ''}"></i>`).join('')}<span>${b.map(x => BAND_NAMES[x]).join(', ')}</span></div>`
@@ -5707,7 +5884,8 @@ const App = {
         html += `<p>${esc(p.hint)}</p>`;
         html += this.fpvField(c);
         if (p.custom) html += `<p>Componente propio${p.spec.source ? ` (de la hoja de datos ${esc(p.spec.source)})` : ''}.</p><button class="btn" id="pEditPart" style="justify-content:center">Editar este componente</button>`;
-        html += `<div class="row" style="flex-wrap:wrap"><button class="btn" id="pRot">Girar <kbd>R</kbd></button>${p.power ? '' : '<button class="btn" id="pDup" title="Ctrl+D">Duplicar</button>'}<button class="btn" id="pDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+        html += `<div class="row" style="flex-wrap:wrap"><button class="btn" id="pRot">Girar <kbd>R</kbd></button>${(p.power && !p.isLabel) ? '' : '<button class="btn" id="pDup" title="Ctrl+D">Duplicar</button>'}<button class="btn" id="pDel">Borrar <kbd>Supr</kbd></button></div>
+        ${p.fp ? '<button class="btn" id="pXPcb" style="justify-content:center">Resaltar en la Placa →</button>' : ''}</div>`;
       }
     } else if (s && s.type === 'multi') {
       const nc = s.comps.length, nw = s.wires.length;
@@ -5722,7 +5900,8 @@ const App = {
         html += `<div class="block"><div class="prop-title"><b>Cable</b></div>
           <p>Une ${esc(endLabel(w.a))} con ${esc(endLabel(w.b))}.</p>
           <p>Para acomodarlo, arrastrá cualquiera de sus tramos con el mouse.</p>
-          <div class="row"><button class="btn" id="wDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+          <div class="row"><button class="btn" id="wDel">Borrar <kbd>Supr</kbd></button></div>
+          <button class="btn" id="pXPcb" style="justify-content:center">Resaltar en la Placa →</button></div>`;
       }
     } else {
       html += `<div class="block"><h3>Cómo armar el esquemático</h3><ol class="steps-help">
@@ -5732,6 +5911,7 @@ const App = {
         <li>Para ordenar un cable, agarrá un tramo y arrastralo.</li>
         <li>Para elegir varios, arrastrá un recuadro en un lugar vacío (o Shift + clic). Para mover la hoja, arrastrá con el botón derecho.</li>
         <li>Usá los símbolos <b>Positivo</b> y <b>Masa</b> para la alimentación: los que tienen el mismo nombre quedan unidos solos.</li>
+        <li>Para unir puntos lejanos sin dibujar el cable, usá <b>Etiqueta de red</b>: poné una en cada punto con el mismo nombre y quedan unidos, igual que Positivo o Masa.</li>
         <li>Hacé doble clic en un componente para cambiar su valor. Con <b>Ctrl+D</b> lo duplicás con el mismo valor.</li>
         <li>El botón <b>Materiales</b> arma la lista de compras y la baja en PDF.</li>
         <li>Cuando termines, pasá al paso 2: <b>Placa</b>.</li></ol></div>`;
@@ -5758,7 +5938,8 @@ const App = {
       const c = compById(s.id);
       if (c) html += `<div class="block"><div class="prop-title"><b>${esc(c.ref)}</b><span>${esc(partOf(c).name)} · ${esc(c.value)}</span></div>
         ${this.fpvField(c)}
-        <div class="row"><button class="btn" id="pcbRot">Girar <kbd>R</kbd></button></div></div>`;
+        <div class="row"><button class="btn" id="pcbRot">Girar <kbd>R</kbd></button></div>
+        <button class="btn" id="pcbXSch" style="justify-content:center">Resaltar en el Esquemático →</button></div>`;
     } else if (s && s.type === 'text') {
       const t = (Store.doc.texts || []).find(t => t.id === s.id);
       if (t) html += `<div class="block"><div class="prop-title"><b>Texto</b><span>${t.layer === 'cobre' ? 'en el cobre' : 'en la guía de montaje'}</span></div>
@@ -5785,7 +5966,8 @@ const App = {
       const t = Store.doc.tracks.find(t => t.id === s.id);
       if (t) html += `<div class="block"><div class="prop-title"><b>Pista</b><span>${fmtMM(t.w)} mm de ancho</span></div>
         <p>Para cambiarle el ancho, elegí otro valor en <b>Ancho de pista</b>.</p>
-        <div class="row"><button class="btn" id="trDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+        <div class="row"><button class="btn" id="trDel">Borrar <kbd>Supr</kbd></button></div>
+        <button class="btn" id="pcbXSch" style="justify-content:center">Resaltar en el Esquemático →</button></div>`;
     }
     html += `<div class="block" id="review"></div>`;
     return html;
@@ -5830,6 +6012,8 @@ const App = {
     on('wDel', 'click', () => this.sch.deleteSel());
     on('goPcb', 'click', () => this.setTab('pcb'));
     on('goBom', 'click', () => this.showBom());
+    on('pXPcb', 'click', () => this.crossHighlight('pcb'));
+    on('pcbXSch', 'click', () => this.crossHighlight('sch'));
     on('pcbRot', 'click', () => this.pcb.rotateSel());
     on('trDel', 'click', () => this.pcb.deleteSel());
     on('txRot', 'click', () => this.pcb.rotateSel());
