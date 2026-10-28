@@ -51,8 +51,17 @@ Entrá a este enlace y empezá a diseñar:
 
 ---
 
-## 🆕 Novedades (20/10/2026)
+## 🆕 Novedades (27/10/2026)
 
+- 🧷 **Las pistas ya no se despegan:** si movés o girás un componente de la placa, las pistas conectadas a sus pads ahora se acomodan solas para seguir pegadas (antes quedaban colgando en el lugar viejo).
+- 🚧 **No se puede rutear fuera de la placa:** al dibujar una pista, si el próximo tramo se saldría del rectángulo verde, se bloquea y avisa (como ya pasaba con las esquinas a 90°).
+- 🔩 **Agujeros de montaje:** nueva herramienta "Agujero" (tecla H) para marcar dónde va cada tornillo, en 4 diámetros (M2 a M5). No lleva cobre: es una guía para perforar después de grabar la placa.
+- 🖼️ **Logos en el cobre:** subí una imagen y quedá lista para plancharla junto con las pistas — se convierte sola a blanco y negro, y se puede mover, girar y cambiar de tamaño.
+- 📄 **Hoja del esquemático en A4 y descarga en PDF:** el esquemático ahora se dibuja en una hoja A4 apaisada con un rótulo abajo (proyecto, alumno, curso y el logo de la escuela), igual que en Proteus o KiCad. Se descarga en PDF, con un botón para centrar el circuito en la hoja y un aviso si algo queda afuera del margen.
+
+### Novedades anteriores (20/10/2026)
+
+- 🎨 **Estética renovada:** paleta de colores profesional (cobre y turquesa) en toda la interfaz.
 - 🔩 **Orientación de las borneras:** ahora el símbolo y la huella de las borneras tienen una flechita/muesca que marca el lado por donde entran los cables (y se atornillan). Sirve para girarlas en la placa y que los tornillos queden accesibles desde afuera.
 - 🚫 **No se solapan componentes en la placa:** al armar la placa (paso 2), ya no se puede arrastrar ni girar un componente hasta dejarlo montado arriba de otro, porque eso no se puede hacer en la vida real.
 - 🏷️ **Etiquetas de red:** nuevo componente "Etiqueta de red" para el esquemático. Poniendo dos etiquetas con el mismo nombre en distintos puntos, el programa los da por conectados sin necesidad de dibujar el cable entre ellos (igual que ya pasaba con Positivo y Masa).

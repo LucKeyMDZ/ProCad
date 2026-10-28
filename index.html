@@ -345,6 +345,9 @@ table.bom { width: 100%; border-collapse: collapse; font-size: 13px; }
             <button class="tool" data-tool="jumper" aria-pressed="false" title="Un alambre que salta por arriba de otra pista"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 14h16" stroke-width="2.6" opacity=".45"/><circle cx="4.5" cy="10" r="2"/><circle cx="15.5" cy="10" r="2"/><path d="M4.5 8V5.5h11V8"/></svg><span>Puente</span><kbd>J</kbd></button>
             <button class="tool" data-tool="text" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 5V3.5h12V5M10 3.5v13M7.5 16.5h5"/></svg><span>Texto</span><kbd>T</kbd></button>
             <button class="tool" data-tool="board" aria-pressed="false"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="3 2"><rect x="2.5" y="4.5" width="15" height="11" rx="1"/></svg><span>Dibujar placa</span><kbd>B</kbd></button>
+            <button class="tool" data-tool="hole" aria-pressed="false" title="Marca el centro de un agujero para tornillo (no lleva cobre)"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="6"/><circle cx="10" cy="10" r="1.1" fill="currentColor" stroke="none"/></svg><span>Agujero</span><kbd>H</kbd></button>
+            <button class="tool" id="bLogoTool" type="button" title="Subí una imagen para que quede en el cobre al planchar"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2.3" y="3.5" width="15.4" height="13" rx="1.2"/><circle cx="6.8" cy="7.8" r="1.5"/><path d="M3 15.2l4.3-4.3 2.8 2.8L15 9l2.3 2.3"/></svg><span>Logo</span></button>
+            <input type="file" id="logoFile" accept="image/*" hidden>
           </div>
         </div>
         <div class="block">
@@ -375,6 +378,13 @@ table.bom { width: 100%; border-collapse: collapse; font-size: 13px; }
             <button data-w="0.6">0,6</button><button data-w="1">1,0</button><button data-w="1.5">1,5</button><button data-w="2">2,0</button>
           </div>
           <p>Para planchar conviene 1,0 mm o más. Usá 1,5 a 2,0 mm para la alimentación.</p>
+        </div>
+        <div class="block">
+          <h3>Diámetro del agujero</h3>
+          <div class="seg" id="holeD">
+            <button data-d="2.2">2,2 (M2)</button><button data-d="3.2">3,2 (M3)</button><button data-d="4.3">4,3 (M4)</button><button data-d="5.3">5,3 (M5)</button>
+          </div>
+          <p>Ya agrandado para que pase el tornillo. Con la herramienta <b>Agujero</b> marcás el centro; después perforá ahí con una mecha de ese número.</p>
         </div>
         <div class="block">
           <h3>Ángulo de las pistas</h3>
@@ -2458,6 +2468,55 @@ const GRID = 10;          // paso de grilla del esquemático
 const PCB_GRIDS = [2.54, 1.27, 0.635, 0.25, 0.1];
 function pcbGrid() { const g = Store.doc && Store.doc.pcbGrid; return g > 0 ? g : 1.27; }
 
+/* ---------- hoja del esquemático: A4 apaisada con rótulo abajo (como Proteus o KiCad) ---------- */
+const SCH_MM = 0.5;                                    // mm reales por unidad de esquemático, al imprimir
+const SHEET_MM = { w: 297, h: 210, margin: 10, title: 26 };  // hoja A4 apaisada, margen y alto del rótulo, en mm
+const mmU = v => v / SCH_MM;                           // mm -> unidades de esquemático
+function sheetRectU() { return [0, 0, mmU(SHEET_MM.w), mmU(SHEET_MM.h)]; }
+// adentro del marco, arriba del rótulo: ahí tiene que entrar el circuito
+function sheetUsableU() {
+  const [x0, y0, x1, y1] = sheetRectU(), m = mmU(SHEET_MM.margin), t = mmU(SHEET_MM.title);
+  return [x0 + m, y0 + m, x1 - m, y1 - m - t];
+}
+// caja que ocupa todo el circuito (componentes, con lugar para su nombre y valor tal como los dibuja drawComp(), más los cables)
+function schContentBBox() {
+  const cs = Store.doc.comps; let b = [1e9, 1e9, -1e9, -1e9], any = false;
+  cs.forEach(c => {
+    const part = partOf(c); if (!part.sym) return;
+    const q = symBBox(c); any = true;
+    let [x0, y0, x1, y1] = q;
+    if (part.power) {
+      // Positivo/Masa: el nombre va arriba, abajo o al costado según la rotación (GND no tiene texto)
+      if (c.part !== 'GND') {
+        if (c.rot === 0) y0 -= 16; else if (c.rot === 2) y1 += 17; else if (c.rot === 1) x1 += 40; else x0 -= 40;
+      }
+    } else if (part.labelTop) { y0 -= 27; x1 = Math.max(x1, x0 + 60); }  // integrados: nombre y valor arriba
+    else if (c.rot % 2 === 0) { y0 -= 17; y1 += 18; }  // horizontal: nombre arriba, valor abajo
+    else x1 += 50;  // vertical: nombre y valor al costado (derecha)
+    b = [Math.min(b[0], x0), Math.min(b[1], y0), Math.max(b[2], x1), Math.max(b[3], y1)];
+  });
+  Store.doc.wires.forEach(w => (wirePath(w) || []).forEach(p => { any = true; b = [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])]; }));
+  return any ? b : null;
+}
+// ¿algo del circuito queda afuera de la hoja (del marco blanco, arriba del rótulo)?
+function schOutOfSheet() {
+  const b = schContentBBox(); if (!b) return false;
+  const u = sheetUsableU(), tol = mmU(2);   // un par de mm de tolerancia: el texto no se mide pixel a pixel
+  return b[0] < u[0] - tol || b[1] < u[1] - tol || b[2] > u[2] + tol || b[3] > u[3] + tol;
+}
+// Mueve todo el circuito (sin cambiarle el tamaño) para que quede centrado adentro del marco. Devuelve false si ya estaba centrado.
+function schCenterOnSheet() {
+  const b = schContentBBox(); if (!b) return false;
+  const u = sheetUsableU();
+  const dx = snap((u[0] + u[2]) / 2 - (b[0] + b[2]) / 2, GRID), dy = snap((u[1] + u[3]) / 2 - (b[1] + b[3]) / 2, GRID);
+  if (!dx && !dy) return false;
+  Store.change(d => {
+    d.comps.forEach(c => { c.x += dx; c.y += dy; });
+    d.wires.forEach(w => { w.pts = w.pts.map(p => [p[0] + dx, p[1] + dy]); });
+  }, 'doc');
+  return true;
+}
+
 function emptyDoc() {
   return {
     format: 'procad-1',
@@ -2468,9 +2527,12 @@ function emptyDoc() {
     tracks: [],           // {id, w, pts:[[x,y],...]}
     texts: [],            // {id, text, x, y, h, rot, layer: 'cobre' | 'guia'}
     jumpers: [],          // puentes de alambre: {id, a:[x,y], b:[x,y]}
+    holes: [],            // agujeros de montaje (sin cobre, para perforar): {id, x, y, d}
+    logos: [],            // imágenes que quedan en el cobre al planchar: {id, x, y, w, h, rot, href}
     lib: {},              // componentes propios que usa el proyecto (se guardan en el archivo)
     pour: { on: false, net: 'GND', style: 'solido', clr: 0.8, thermal: true },
     trackW: 1.0,
+    holeD: 3.2,
     bom: { boards: 1, extras: true, prices: {} },   // lista de materiales: placas a armar y precios anotados
     seq: 1
   };
@@ -2590,6 +2652,23 @@ function compOnBoard(c) {
   if (c.px === null || !partOf(c).fp) return false;
   const B = Store.doc.board, b = fpBox(c);
   return b[0] >= B.x - 0.01 && b[1] >= B.y - 0.01 && b[2] <= B.x + B.w + 0.01 && b[3] <= B.y + B.h + 0.01;
+}
+// Si una punta de pista estaba justo sobre un pad de "c", la vuelve a pegar ahí después de mover o girar el componente
+// (oldPads: posición absoluta de cada pad de "c" ANTES del cambio, en el mismo orden que partOf(c).fp.pads)
+function reattachTracks(c, oldPads) {
+  const part = partOf(c);
+  if (!part.fp || !oldPads) return;
+  const newPads = part.fp.pads.map(p => padPos(c, p));
+  const EPS = 0.01;
+  Store.doc.tracks.forEach(t => {
+    const ends = t.pts.length > 1 ? [0, t.pts.length - 1] : [0];
+    ends.forEach(idx => {
+      const pt = t.pts[idx];
+      for (let i = 0; i < oldPads.length; i++) {
+        if (Math.hypot(pt[0] - oldPads[i][0], pt[1] - oldPads[i][1]) < EPS) { t.pts[idx] = newPads[i]; return; }
+      }
+    });
+  });
 }
 
 /* ---------- unión de conjuntos (para redes y conexiones) ---------- */
@@ -2808,6 +2887,9 @@ function migrateDoc(d) {
   (d.comps || []).forEach(c => { if (c.part === 'CE' && !c.fpv && c.px !== null && c.px !== undefined) c.fpv = 'orig'; });
   if (!Array.isArray(d.jumpers)) d.jumpers = [];
   if (!Array.isArray(d.texts)) d.texts = [];
+  if (!Array.isArray(d.holes)) d.holes = [];
+  if (!Array.isArray(d.logos)) d.logos = [];
+  if (!d.holeD) d.holeD = 3.2;
   d.wires.forEach(w => {
     if (!w.pts) {
       const a = endPos(w.a), b = endPos(w.b);
@@ -2887,7 +2969,7 @@ function schPalette() {
   return {
     bg: cssv('--sch-bg'), grid: cssv('--sch-grid'), sym: cssv('--sch-sym'), wire: cssv('--sch-wire'),
     text: cssv('--sch-text'), muted: cssv('--sch-muted'), accent: cssv('--select'), free: cssv('--pin-free'),
-    ok: cssv('--ok'), err: cssv('--err'), font: cssv('--font-ui'), mono: cssv('--font-mono')
+    ok: cssv('--ok'), err: cssv('--err'), font: cssv('--font-ui'), mono: cssv('--font-mono'), sheetGrid: '#d9dce1'
   };
 }
 const samePt = (a, b) => a && b && a[0] === b[0] && a[1] === b[1];
@@ -3087,12 +3169,46 @@ class SchEditor {
     else this.setSelection(comps, wires);
   }
   fitView() {
-    const cs = Store.doc.comps;
-    if (!cs.length) { this.v.z = 2; this.v.tx = this.v.w / 2; this.v.ty = this.v.h / 2; this.draw(); return; }
-    let b = [1e9, 1e9, -1e9, -1e9];
-    cs.forEach(c => { const q = symBBox(c); b = [Math.min(b[0], q[0]), Math.min(b[1], q[1] - 14), Math.max(b[2], q[2]), Math.max(b[3], q[3] + 14)]; });
-    Store.doc.wires.forEach(w => (wirePath(w) || []).forEach(p => { b = [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])]; }));
+    const sheet = sheetRectU();
+    const cb = schContentBBox();
+    const b = cb ? [Math.min(cb[0], sheet[0]), Math.min(cb[1], sheet[1]), Math.max(cb[2], sheet[2]), Math.max(cb[3], sheet[3])] : sheet;
     this.v.fit(b, 60, 3.2); this.draw();
+  }
+  // la hoja (A4 apaisada) con el rótulo abajo: proyecto, alumno y curso
+  drawSheet(ctx, P) {
+    const [x0, y0, x1, y1] = sheetRectU();
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = P.sheetGrid;
+    for (let x = x0; x <= x1 + 0.01; x += GRID) for (let y = y0; y <= y1 + 0.01; y += GRID) ctx.fillRect(x - 0.55, y - 0.55, 1.1, 1.1);
+    const m = mmU(SHEET_MM.margin), t = mmU(SHEET_MM.title);
+    ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = 0.8; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.3;
+    ctx.strokeRect(x0 + m, y0 + m, (x1 - x0) - 2 * m, (y1 - y0) - 2 * m);
+    this.drawTitleBlock(ctx, x0 + m, y1 - m - t, (x1 - x0) - 2 * m, t);
+  }
+  // logo de la escuela (el mismo que ya se usa en el PDF de materiales), cacheado
+  titleLogo() { if (!this._logoCv) this._logoCv = App.logoCanvas(); return this._logoCv; }
+  drawTitleBlock(ctx, x, y, w, h) {
+    const d = Store.doc;
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.1; ctx.strokeRect(x, y, w, h);
+    const logoCv = this.titleLogo(), logoW = logoCv ? h : 0;
+    if (logoCv) {
+      ctx.drawImage(logoCv, x, y, logoW, h);
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + logoW, y); ctx.lineTo(x + logoW, y + h); ctx.stroke();
+    }
+    const cols = [['PROYECTO', d.name || 'Mi proyecto'], ['ALUMNO', d.author || '—'], ['CURSO', d.course || '—']];
+    const cw = (w - logoW) / cols.length;
+    cols.forEach(([label, val], i) => {
+      const cx = x + logoW + i * cw;
+      if (i > 0) { ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx, y + h); ctx.stroke(); }
+      ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+      ctx.fillStyle = '#5a5a5a'; ctx.font = `700 ${mmU(2.6)}px ${TEXT_FONT}`;
+      ctx.fillText(label, cx + mmU(3), y + mmU(7));
+      ctx.fillStyle = '#101010'; ctx.font = `700 ${mmU(4.6)}px ${TEXT_FONT}`;
+      let txt = String(val);
+      while (ctx.measureText(txt).width > cw - mmU(6) && txt.length > 3) txt = txt.slice(0, -2) + '…';
+      ctx.fillText(txt, cx + mmU(3), y + mmU(17));
+    });
   }
   // cables que tienen un extremo en un pin de este componente
   attached(cid) {
@@ -3400,6 +3516,8 @@ class SchEditor {
     ctx = v.worldCtx();
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
+    this.drawSheet(ctx, P);
+
     const paths = new Map(d.wires.map(w => [w.id, wirePath(w)]));
     // cuántos cables llegan a cada pin
     const wc = new Map();
@@ -3616,6 +3734,12 @@ function svgPcbText(t, tx, ty, color) {
   const { fs } = textMetrics(t);
   const mir = t.layer === 'cobre' ? ' scale(-1 1)' : '';
   return `<text x="0" y="${fx(t.h / 2)}" font-size="${fx(fs)}" font-family='${TEXT_FONT}' font-weight="700" text-anchor="middle" fill="${color}" transform="translate(${tx(t.x)} ${ty(t.y)}) rotate(${t.rot * 90})${mir}">${esc(t.text)}</text>`;
+}
+
+/* ---------- logos (quedan del lado del cobre, se dibujan espejados como el texto de cobre) ---------- */
+function logoBox(l) {
+  const a = rotPt(-l.w / 2, -l.h / 2, l.rot), b = rotPt(l.w / 2, l.h / 2, l.rot);
+  return [l.x + Math.min(a[0], b[0]), l.y + Math.min(a[1], b[1]), l.x + Math.max(a[0], b[0]), l.y + Math.max(a[1], b[1])];
 }
 
 /* ---------- distancias para la revisión ---------- */
@@ -3929,6 +4053,12 @@ function pcbAnalyze(opts) {
     else if (!p.jnets) issues.push({ level: 'warn', msg: `El puente ${p.jn} todavía no está unido a ninguna pista. Llevá una pista a cada punta.`, at: mid, jumper: j.id });
   });
 
+  // pistas: tienen que quedar dentro de la placa
+  d.tracks.forEach(t => {
+    const out = t.pts.some(q => q[0] < B.x - 0.01 || q[1] < B.y - 0.01 || q[0] > B.x + B.w + 0.01 || q[1] > B.y + B.h + 0.01);
+    if (out) issues.push({ level: 'warn', msg: 'Una pista queda afuera de la placa.', at: t.pts[0], track: t.id });
+  });
+
   // pistas sueltas
   const padCl = new Set(pads.map(p => p.cl));
   const seenLoose = new Set();
@@ -4056,7 +4186,12 @@ class PcbEditor {
           this.app.toast('No se puede girar: algún componente quedaría encima de otro.'); return;
         }
       }
-      Store.change(d => { d.comps.forEach(c => { if (cs.has(c.id)) c.pr = (c.pr + 1) % 4; }); d.texts.forEach(t => { if (ts.has(t.id)) t.rot = (t.rot + 1) % 4; }); }, 'pcb');
+      Store.change(d => {
+        const oldPads = d.comps.filter(c => cs.has(c.id)).map(c => [c, partOf(c).fp && partOf(c).fp.pads.map(p => padPos(c, p))]);
+        d.comps.forEach(c => { if (cs.has(c.id)) c.pr = (c.pr + 1) % 4; });
+        d.texts.forEach(t => { if (ts.has(t.id)) t.rot = (t.rot + 1) % 4; });
+        oldPads.forEach(([c, op]) => op && reattachTracks(c, op));
+      }, 'pcb');
       return;
     }
     if (this.sel && this.sel.type === 'comp') {
@@ -4064,18 +4199,25 @@ class PcbEditor {
       if (c0 && overlapsOtherFp(fpBoxAt(partOf(c0), c0.px, c0.py, (c0.pr + 1) % 4), c0.id)) {
         this.app.toast('No se puede girar: quedaría encima de otro componente.'); return;
       }
-      Store.change(d => { const c = d.comps.find(c => c.id === this.sel.id); c.pr = (c.pr + 1) % 4; }, 'pcb');
+      Store.change(d => {
+        const c = d.comps.find(c => c.id === this.sel.id);
+        const oldPads = partOf(c).fp.pads.map(p => padPos(c, p));
+        c.pr = (c.pr + 1) % 4;
+        reattachTracks(c, oldPads);
+      }, 'pcb');
     }
     else if (this.sel && this.sel.type === 'text')
       Store.change(d => { const t = d.texts.find(t => t.id === this.sel.id); if (t) t.rot = (t.rot + 1) % 4; }, 'pcb');
+    else if (this.sel && this.sel.type === 'logo')
+      Store.change(d => { const l = (d.logos || []).find(l => l.id === this.sel.id); if (l) l.rot = (l.rot + 1) % 4; }, 'pcb');
   }
   deleteSel() {
     if (this.sel && (this.sel.type === 'multi' || this.sel.type === 'jumper')) {
-      const tr = new Set(this.selOf('track')), tx = new Set(this.selOf('text')), jp = new Set(this.selOf('jumper')), nc = this.selOf('comp').length;
-      if (tr.size || tx.size || jp.size) {
-        Store.change(d => { d.tracks = d.tracks.filter(t => !tr.has(t.id)); d.texts = d.texts.filter(t => !tx.has(t.id)); d.jumpers = d.jumpers.filter(j => !jp.has(j.id)); }, 'pcb');
+      const tr = new Set(this.selOf('track')), tx = new Set(this.selOf('text')), jp = new Set(this.selOf('jumper')), ho = new Set(this.selOf('hole')), lg = new Set(this.selOf('logo')), nc = this.selOf('comp').length;
+      if (tr.size || tx.size || jp.size || ho.size || lg.size) {
+        Store.change(d => { d.tracks = d.tracks.filter(t => !tr.has(t.id)); d.texts = d.texts.filter(t => !tx.has(t.id)); d.jumpers = d.jumpers.filter(j => !jp.has(j.id)); d.holes = (d.holes || []).filter(h => !ho.has(h.id)); d.logos = (d.logos || []).filter(l => !lg.has(l.id)); }, 'pcb');
       }
-      if (nc) this.app.toast('Se borraron las pistas, textos y puentes elegidos. Los componentes se borran desde el esquemático (paso 1).');
+      if (nc) this.app.toast('Se borraron las pistas, textos, puentes, agujeros y logos elegidos. Los componentes se borran desde el esquemático (paso 1).');
       this.sel = nc ? { type: 'multi', comps: this.selOf('comp'), tracks: [], texts: [], jumpers: [] } : null;
       if (this.sel && nc === 1) this.sel = { type: 'comp', id: this.sel.comps[0] };
       this.app.onSelect(); this.draw(); return;
@@ -4083,6 +4225,14 @@ class PcbEditor {
     if (this.sel && this.sel.type === 'text') {
       const id = this.sel.id; this.sel = null;
       Store.change(d => { d.texts = d.texts.filter(t => t.id !== id); }, 'pcb'); this.app.onSelect(); return;
+    }
+    if (this.sel && this.sel.type === 'hole') {
+      const id = this.sel.id; this.sel = null;
+      Store.change(d => { d.holes = (d.holes || []).filter(h => h.id !== id); }, 'pcb'); this.app.onSelect(); return;
+    }
+    if (this.sel && this.sel.type === 'logo') {
+      const id = this.sel.id; this.sel = null;
+      Store.change(d => { d.logos = (d.logos || []).filter(l => l.id !== id); }, 'pcb'); this.app.onSelect(); return;
     }
     if (this.sel && this.sel.type === 'track') {
       const id = this.sel.id; this.sel = null;
@@ -4115,13 +4265,13 @@ class PcbEditor {
   /* ---------- selección de varios ---------- */
   selOf(type) { const s = this.sel; return !s ? [] : s.type === type ? [s.id] : s.type === 'multi' ? (s[type + 's'] || []) : []; }
   setSelection(o) {
-    const L = ['comp', 'track', 'text', 'jumper'].map(t => [t, [...new Set(o[t + 's'] || [])]]);
+    const L = ['comp', 'track', 'text', 'jumper', 'hole', 'logo'].map(t => [t, [...new Set(o[t + 's'] || [])]]);
     const total = L.reduce((a, [, v]) => a + v.length, 0);
     if (!total) return this.select(null);
     if (total === 1) { const [t, v] = L.find(([, v]) => v.length); return this.select({ type: t, id: v[0] }); }
     const m = { type: 'multi' }; L.forEach(([t, v]) => m[t + 's'] = v); this.select(m);
   }
-  curSelection() { const o = {}; ['comp', 'track', 'text', 'jumper'].forEach(t => o[t + 's'] = this.selOf(t).slice()); return o; }
+  curSelection() { const o = {}; ['comp', 'track', 'text', 'jumper', 'hole', 'logo'].forEach(t => o[t + 's'] = this.selOf(t).slice()); return o; }
   toggleSel(type, id) {
     const o = this.curSelection(), a = o[type + 's'], i = a.indexOf(id);
     if (i >= 0) a.splice(i, 1); else a.push(id);
@@ -4130,7 +4280,7 @@ class PcbEditor {
   inSel(type, id) { return this.selOf(type).includes(id); }
   selectAll() {
     const d = Store.doc;
-    this.setSelection({ comps: d.comps.filter(c => partOf(c).fp && c.px !== null).map(c => c.id), tracks: d.tracks.map(t => t.id), texts: (d.texts || []).map(t => t.id), jumpers: (d.jumpers || []).map(j => j.id) });
+    this.setSelection({ comps: d.comps.filter(c => partOf(c).fp && c.px !== null).map(c => c.id), tracks: d.tracks.map(t => t.id), texts: (d.texts || []).map(t => t.id), jumpers: (d.jumpers || []).map(j => j.id), holes: (d.holes || []).map(h => h.id), logos: (d.logos || []).map(l => l.id) });
   }
   finishBox(add) {
     const b = this.boxSel; this.boxSel = null;
@@ -4142,7 +4292,9 @@ class PcbEditor {
       comps: d.comps.filter(c => partOf(c).fp && c.px !== null && box(fpBox(c))).map(c => c.id),
       tracks: d.tracks.filter(t => t.pts.every(inside)).map(t => t.id),
       texts: (d.texts || []).filter(t => box(textBox(t))).map(t => t.id),
-      jumpers: (d.jumpers || []).filter(j => inside(j.a) && inside(j.b)).map(j => j.id)
+      jumpers: (d.jumpers || []).filter(j => inside(j.a) && inside(j.b)).map(j => j.id),
+      holes: (d.holes || []).filter(h => inside([h.x, h.y])).map(h => h.id),
+      logos: (d.logos || []).filter(l => box(logoBox(l))).map(l => l.id)
     };
     if (add) { const c = this.curSelection(); Object.keys(o).forEach(k => o[k] = c[k].concat(o[k])); }
     this.setSelection(o);
@@ -4154,18 +4306,35 @@ class PcbEditor {
       comps: o.comps.map(id => { const c = compById(id); return c && [c, c.px, c.py]; }).filter(Boolean),
       tracks: o.tracks.map(id => { const t = d.tracks.find(t => t.id === id); return t && [t, t.pts.map(p => [p[0], p[1]])]; }).filter(Boolean),
       texts: o.texts.map(id => { const t = d.texts.find(t => t.id === id); return t && [t, t.x, t.y]; }).filter(Boolean),
-      jumpers: o.jumpers.map(id => { const j = d.jumpers.find(j => j.id === id); return j && [j, j.a.slice(), j.b.slice()]; }).filter(Boolean)
+      jumpers: o.jumpers.map(id => { const j = d.jumpers.find(j => j.id === id); return j && [j, j.a.slice(), j.b.slice()]; }).filter(Boolean),
+      holes: o.holes.map(id => { const h = (d.holes || []).find(h => h.id === id); return h && [h, h.x, h.y]; }).filter(Boolean),
+      logos: o.logos.map(id => { const l = (d.logos || []).find(l => l.id === id); return l && [l, l.x, l.y]; }).filter(Boolean)
     };
   }
   groupMove(g, dx, dy) {
+    const oldPads = g.comps.map(([c]) => [c, partOf(c).fp && partOf(c).fp.pads.map(p => padPos(c, p))]);
     g.comps.forEach(([c, x, y]) => { c.px = x + dx; c.py = y + dy; });
     g.tracks.forEach(([t, P]) => { t.pts = P.map(p => [p[0] + dx, p[1] + dy]); });
     g.texts.forEach(([t, x, y]) => { t.x = x + dx; t.y = y + dy; });
     g.jumpers.forEach(([j, a, b]) => { j.a = [a[0] + dx, a[1] + dy]; j.b = [b[0] + dx, b[1] + dy]; });
+    g.holes.forEach(([h, x, y]) => { h.x = x + dx; h.y = y + dy; });
+    g.logos.forEach(([l, x, y]) => { l.x = x + dx; l.y = y + dy; });
+    // también repega las pistas de componentes movidos en grupo que no estaban, ellas mismas, seleccionadas
+    oldPads.forEach(([c, op]) => op && reattachTracks(c, op));
   }
   jumperAt(x, y) {
     const js = Store.doc.jumpers || [], tol = Math.max(0.5, 5 / this.v.z);
     for (let i = js.length - 1; i >= 0; i--) if (distPtSeg(x, y, js[i].a[0], js[i].a[1], js[i].b[0], js[i].b[1]) < tol) return js[i];
+    return null;
+  }
+  holeAt(x, y) {
+    const hs = Store.doc.holes || [], tol = Math.max(0.4, 4 / this.v.z);
+    for (let i = hs.length - 1; i >= 0; i--) if (Math.hypot(hs[i].x - x, hs[i].y - y) <= hs[i].d / 2 + tol) return hs[i];
+    return null;
+  }
+  logoAt(x, y) {
+    const ls = Store.doc.logos || [];
+    for (let i = ls.length - 1; i >= 0; i--) { const b = logoBox(ls[i]); if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return ls[i]; }
     return null;
   }
   // segundo punto de un puente: siempre derecho (horizontal o vertical)
@@ -4208,6 +4377,8 @@ class PcbEditor {
     const p = this.padAt(x, y); if (p) return { type: 'pad', p };
     if (this.tool === 'move') { const t = this.textAt(x, y); if (t) return { type: 'text', id: t.id }; }
     if (this.tool === 'move') { const j = this.jumperAt(x, y); if (j) return { type: 'jumper', id: j.id }; }
+    if (this.tool === 'move') { const h = this.holeAt(x, y); if (h) return { type: 'hole', id: h.id }; }
+    if (this.tool === 'move') { const lg = this.logoAt(x, y); if (lg) return { type: 'logo', id: lg.id }; }
     if (this.tool !== 'track') { const c = this.compAt(x, y); if (c) return { type: 'comp', id: c.id }; }
     const t = this.trackAt(x, y); if (t) return { type: 'track', id: t.t.id, t: t.t, k: t.k };
     if (this.tool === 'track') { const c = this.compAt(x, y); if (c) return { type: 'comp', id: c.id }; }
@@ -4277,6 +4448,12 @@ class PcbEditor {
     this.flash = { at: problem.at, t: performance.now() };
     this.app.toast(problem.msg, 6500); this.draw();
   }
+  // ¿este tramo (con el ancho de la pista) se saldría del rectángulo de la placa?
+  offBoardSeg(a, b) {
+    const B = Store.doc.board, r = Store.doc.trackW / 2;
+    const inside = p => p[0] >= B.x + r - 0.02 && p[1] >= B.y + r - 0.02 && p[0] <= B.x + B.w - r + 0.02 && p[1] <= B.y + B.h - r + 0.02;
+    return !inside(a) || !inside(b);
+  }
   trackClick(x, y) {
     const h = this.hitTest(x, y);
     if (!this.cur) {
@@ -4306,6 +4483,10 @@ class PcbEditor {
         return;
       }
     }
+    if (segs.some(([a, b]) => this.offBoardSeg(a, b))) {
+      this.blocked({ at: tp, msg: 'La pista se saldría de la placa. Quedate adentro del rectángulo verde.' });
+      return;
+    }
     const prob = this.checkSegs(segs, this.cur.net, h && h.type === 'pad' ? h.p : null);
     if (prob) { this.blocked(prob); return; }
     this.cur.pts.push(...add.map(p => [p[0], p[1]]));
@@ -4334,6 +4515,11 @@ class PcbEditor {
         const t = { id: Store.nid(), text: 'Texto', x: snap(x, pcbGrid()), y: snap(y, pcbGrid()), h: 3, rot: 0, layer: 'cobre' };
         Store.change(d => { d.texts = d.texts || []; d.texts.push(t); }, 'pcb');
         this.setTool('move'); this.select({ type: 'text', id: t.id }); this.app.focusText(); return;
+      }
+      if (this.tool === 'hole') {
+        const ho = { id: Store.nid(), x: snap(x, pcbGrid()), y: snap(y, pcbGrid()), d: Store.doc.holeD || 3.2 };
+        Store.change(d => { d.holes = d.holes || []; d.holes.push(ho); }, 'pcb');
+        this.setTool('move'); this.select({ type: 'hole', id: ho.id }); return;
       }
       if (this.tool === 'board') {
         this.boardDrag = { a: [snap(x, 1), snap(y, 1)], b: [snap(x, 1), snap(y, 1)] }; return;
@@ -4369,6 +4555,16 @@ class PcbEditor {
         this.select({ type: 'text', id: t.id });
         this.tdrag = { id: t.id, ox: x - t.x, oy: y - t.y, moved: false }; return;
       }
+      if (h && h.type === 'hole') {
+        const ho = (Store.doc.holes || []).find(ho => ho.id === h.id);
+        this.select({ type: 'hole', id: ho.id });
+        this.hdrag = { id: ho.id, ox: x - ho.x, oy: y - ho.y, moved: false }; return;
+      }
+      if (h && h.type === 'logo') {
+        const lg = (Store.doc.logos || []).find(lg => lg.id === h.id);
+        this.select({ type: 'logo', id: lg.id });
+        this.ldrag = { id: lg.id, ox: x - lg.x, oy: y - lg.y, moved: false }; return;
+      }
       if (h && h.type === 'track') { this.select({ type: 'track', id: h.id }); return; }
       // lugar vacío: con el dedo se mueve la vista; con el mouse, recuadro para elegir varios
       if (e.pointerType === 'touch') { this.select(null); this.pan = { sx, sy, tx: this.v.tx, ty: this.v.ty }; return; }
@@ -4378,7 +4574,7 @@ class PcbEditor {
     cv.addEventListener('pointermove', e => {
       const [sx, sy] = this.v.evPos(e), [x, y] = this.v.toWorld(sx, sy);
       this.mouse = [x, y]; this.mouseS = [sx, sy];
-      if (this.pan || this.drag || this.gdrag || this.tdrag || this.jend) cv.style.cursor = 'grabbing';   // la mano: solo mientras se mueve algo o la vista
+      if (this.pan || this.drag || this.gdrag || this.tdrag || this.jend || this.hdrag || this.ldrag) cv.style.cursor = 'grabbing';   // la mano: solo mientras se mueve algo o la vista
       if (this.pan) { this.v.tx = this.pan.tx + sx - this.pan.sx; this.v.ty = this.pan.ty + sy - this.pan.sy; this.draw(); return; }
       if (this.boardDrag) { this.boardDrag.b = [snap(x, 1), snap(y, 1)]; this.draw(); return; }
       if (this.boxSel) { this.boxSel.b = [x, y]; this.draw(); return; }
@@ -4415,6 +4611,24 @@ class PcbEditor {
         }
         return;
       }
+      if (this.hdrag) {
+        const ho = (Store.doc.holes || []).find(ho => ho.id === this.hdrag.id);
+        const nx = snap(x - this.hdrag.ox, pcbGrid()), ny = snap(y - this.hdrag.oy, pcbGrid());
+        if (ho && (nx !== ho.x || ny !== ho.y)) {
+          if (!this.hdrag.moved) { this.hdrag.moved = true; Store.checkpoint(); }
+          ho.x = nx; ho.y = ny; this.draw();
+        }
+        return;
+      }
+      if (this.ldrag) {
+        const lg = (Store.doc.logos || []).find(lg => lg.id === this.ldrag.id);
+        const nx = snap(x - this.ldrag.ox, pcbGrid()), ny = snap(y - this.ldrag.oy, pcbGrid());
+        if (lg && (nx !== lg.x || ny !== lg.y)) {
+          if (!this.ldrag.moved) { this.ldrag.moved = true; Store.checkpoint(); }
+          lg.x = nx; lg.y = ny; this.draw();
+        }
+        return;
+      }
       if (this.drag) {
         const c = compById(this.drag.id);
         const nx = snap(x - this.drag.ox, pcbGrid()), ny = snap(y - this.drag.oy, pcbGrid());
@@ -4425,14 +4639,16 @@ class PcbEditor {
           else {
             this.drag.toasted = false;
             if (!this.drag.moved) { this.drag.moved = true; Store.checkpoint(); }
+            const oldPads = partOf(c).fp.pads.map(p => padPos(c, p));
             c.px = nx; c.py = ny; this.A = null;
+            reattachTracks(c, oldPads);
           }
           this.draw();
         }
         return;
       }
       this.hover = this.hitTest(x, y);
-      cv.style.cursor = this.tool === 'text' ? 'text' : this.tool === 'track' && this.cur && this.preview ? 'not-allowed' : this.tool === 'track' || this.tool === 'board' || this.tool === 'jumper' ? 'crosshair' :
+      cv.style.cursor = this.tool === 'text' ? 'text' : this.tool === 'track' && this.cur && this.preview ? 'not-allowed' : this.tool === 'track' || this.tool === 'board' || this.tool === 'jumper' || this.tool === 'hole' ? 'crosshair' :
         this.hover && this.hover.type === 'track' ? 'pointer' : 'default';
       this.app.status(); this.draw();
     });
@@ -4442,6 +4658,8 @@ class PcbEditor {
       if (this.jend) { if (this.jend.moved) Store.emit('pcb'); this.jend = null; }
       if (this.drag) { if (this.drag.moved) Store.emit('pcb'); this.drag = null; }
       if (this.tdrag) { if (this.tdrag.moved) Store.emit('pcb'); this.tdrag = null; }
+      if (this.hdrag) { if (this.hdrag.moved) Store.emit('pcb'); this.hdrag = null; }
+      if (this.ldrag) { if (this.ldrag.moved) Store.emit('pcb'); this.ldrag = null; }
       if (this.boardDrag) {
         const { a, b } = this.boardDrag; this.boardDrag = null;
         const w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
@@ -4463,7 +4681,10 @@ class PcbEditor {
 
   hint() {
     if (this.tool === 'text') return 'Hacé clic en la placa donde quieras poner el texto (por ejemplo, tu apellido o el curso).';
+    if (this.tool === 'hole') return 'Hacé clic donde va el centro del agujero. Elegí el diámetro a la izquierda (o después, en el panel de la derecha).';
     if (this.sel && this.sel.type === 'text') return 'Arrastrá el texto para moverlo. R: girar. Supr: borrar. Cambiá lo que dice en el panel de la derecha.';
+    if (this.sel && this.sel.type === 'hole') return 'Arrastralo para moverlo. Supr: borrar. Cambiá el diámetro en el panel de la derecha.';
+    if (this.sel && this.sel.type === 'logo') return 'Arrastralo para moverlo. R: girar. Cambiá el tamaño en el panel de la derecha. Supr: borrar.';
     if (this.tool === 'board') return 'Arrastrá con el mouse para dibujar el tamaño de tu placa de cobre. También podés escribir las medidas a la izquierda.';
     if (this.tool === 'jumper') return this.jdraft ? 'Hacé clic donde termina el puente (siempre queda derecho). Esc: cancelar.'
       : 'Puente: hacé clic donde empieza. Sirve para saltar por arriba de una pista que no podés esquivar.';
@@ -4482,6 +4703,19 @@ class PcbEditor {
   }
 
   /* ---------- dibujo ---------- */
+  // Imagen cacheada de un logo (se recarga sola si cambia el href, por ejemplo al reemplazar la imagen)
+  logoImg(l) {
+    if (!this._logoImgs) this._logoImgs = new Map();
+    let e = this._logoImgs.get(l.id);
+    if (!e || e.href !== l.href) {
+      const img = new Image();
+      e = { href: l.href, img, ready: false };
+      img.onload = () => { e.ready = true; this.draw(); };
+      img.src = l.href;
+      this._logoImgs.set(l.id, e);
+    }
+    return e.ready ? e.img : null;
+  }
   draw() {
     if (this._raf) return;
     this._raf = requestAnimationFrame(() => { this._raf = null; this.render(); });
@@ -4593,6 +4827,30 @@ class PcbEditor {
       ctx.globalAlpha = 1;
     });
 
+    // logos: van del lado del cobre, se ven espejados (igual que el texto en cobre: al planchar quedan derechos)
+    (d.logos || []).forEach(l => {
+      const img = this.logoImg(l), sel = this.inSel('logo', l.id);
+      ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.rot * Math.PI / 2); ctx.scale(-1, 1);
+      ctx.globalAlpha = real ? 0.9 : 1;
+      if (img) ctx.drawImage(img, -l.w / 2, -l.h / 2, l.w, l.h);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      if (sel) {
+        const b = logoBox(l); ctx.strokeStyle = cssv('--select'); ctx.lineWidth = Math.max(0.15, 1.5 * px1);
+        ctx.setLineDash([6 * px1, 4 * px1]); ctx.strokeRect(b[0] - 0.5, b[1] - 0.5, b[2] - b[0] + 1, b[3] - b[1] + 1); ctx.setLineDash([]);
+      }
+    });
+
+    // agujeros de montaje: solo marcan dónde perforar, no llevan cobre
+    (d.holes || []).forEach(h => {
+      const sel = this.inSel('hole', h.id);
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.d / 2, 0, 7);
+      ctx.strokeStyle = sel ? cssv('--select') : cssv('--pcb-label'); ctx.lineWidth = Math.max(0.15, 1.3 * px1);
+      ctx.setLineDash([2.2 * px1 * 2, 1.6 * px1 * 2]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(h.x, h.y, Math.max(0.18, 0.3), 0, 7);
+      ctx.fillStyle = sel ? cssv('--select') : cssv('--pcb-label'); ctx.fill();
+    });
+
     // nombres (R1, C1...)
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     d.comps.forEach(c => {
@@ -4669,6 +4927,7 @@ class PcbEditor {
         const d1 = [last[0] - prev[0], last[1] - prev[1]], d2 = [segs[0][1][0] - segs[0][0][0], segs[0][1][1] - segs[0][0][1]];
         if (isRightAngleCorner(d1, d2)) this.preview = { at: last, msg: 'Esa esquina quedaría a 90°, y acá no se permite: girá en diagonal (45°) con la tecla F, o desactivá el bloqueo en "Ángulo de las pistas".' };
       }
+      if (!this.preview && segs.some(([a, b]) => this.offBoardSeg(a, b))) this.preview = { at: this.targetPoint(), msg: 'La pista se saldría de la placa. Quedate adentro del rectángulo verde.' };
       if (!this.preview) this.preview = this.checkSegs(segs, net, hp && !(this.cur.from && hp.c.id === this.cur.from.c.id && hp.i === this.cur.from.i) ? hp : null);
       ctx.globalAlpha = 0.75; ctx.strokeStyle = this.preview ? '#ff4d4d' : '#f0a46a'; ctx.lineWidth = d.trackW; this.strokePts(ctx, pre); ctx.globalAlpha = 1;
       if (this.preview) { ctx.strokeStyle = '#ff4d4d'; ctx.lineWidth = Math.max(0.25, 2.5 * px1); ctx.beginPath(); ctx.arc(this.preview.at[0], this.preview.at[1], Math.max(1.4, 10 * px1), 0, 7); ctx.stroke(); }
@@ -5074,20 +5333,27 @@ function svgBoard(kind, ox, oy) {
       const url = pourImage(R, '#000').toDataURL('image/png');
       s += `<image href="${url}" x="${tx(R.B.x)}" y="${ty(R.B.y)}" width="${fx(R.W / R.res)}" height="${fx(R.H / R.res)}" preserveAspectRatio="none"/>`;
     }
+    // logos: espejados como el texto en cobre, para que al planchar queden derechos en la placa
+    (d.logos || []).forEach(l => {
+      s += `<image href="${l.href}" x="${fx(-l.w / 2)}" y="${fx(-l.h / 2)}" width="${fx(l.w)}" height="${fx(l.h)}" preserveAspectRatio="none" transform="translate(${tx(l.x)} ${ty(l.y)}) rotate(${l.rot * 90}) scale(-1 1)"/>`;
+    });
     (d.texts || []).forEach(t => { if (t.layer === 'cobre' && t.text) s += svgPcbText(t, tx, ty, '#000'); });
     d.tracks.forEach(t => {
       s += `<polyline points="${t.pts.map(p => tx(p[0]) + ',' + ty(p[1])).join(' ')}" fill="none" stroke="#000" stroke-width="${fx(t.w)}" stroke-linecap="round" stroke-linejoin="round"/>`;
     });
-    A.pads.forEach(p => {
+    // los componentes que todavía están en la bandeja (sin ubicar) no van impresos: solo los que ya están en la placa
+    A.pads.filter(p => p.jmp || compOnBoard(p.c)).forEach(p => {
       s += p.pad.sq
         ? `<rect x="${tx(p.x - p.r)}" y="${ty(p.y - p.r)}" width="${fx(p.r * 2)}" height="${fx(p.r * 2)}" fill="#000"/>`
         : `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="${fx(p.r)}" fill="#000"/>`;
       // punto blanco para centrar la mecha al agujerear
       s += `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="0.3" fill="#fff"/>`;
     });
+    // agujeros de montaje: solo un círculo de referencia fino (no llevan cobre), para ubicar la mecha después de grabar
+    (d.holes || []).forEach(h => { s += `<circle cx="${tx(h.x)}" cy="${ty(h.y)}" r="${fx(h.d / 2)}" fill="none" stroke="#000" stroke-width="0.12"/>`; });
   } else {
     d.comps.forEach(c => {
-      const part = partOf(c); if (!part.fp || c.px === null) return;
+      const part = partOf(c); if (!part.fp || !compOnBoard(c)) return;
       const b = fpBox(c);
       const rot = c.pr * 90;
       s += `<g transform="translate(${tx(c.px)} ${ty(c.py)}) rotate(${rot})" fill="none" stroke="#000" stroke-width="0.2">${silkSvg(part)}</g>`;
@@ -5099,7 +5365,9 @@ function svgBoard(kind, ox, oy) {
       const vert = Math.abs(j.b[0] - j.a[0]) < 1e-6, mx = (j.a[0] + j.b[0]) / 2, my = (j.a[1] + j.b[1]) / 2;
       s += `<text x="${tx(vert ? mx + 1.3 : mx)}" y="${ty(vert ? my : my - 1.1)}" font-size="1.3" text-anchor="${vert ? 'start' : 'middle'}" font-family="sans-serif">P${k + 1}</text>`;
     });
-    A.pads.forEach(p => { s += `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="${fx(p.r * 0.75)}" fill="none" stroke="#000" stroke-width="0.15"/>`; });
+    // los componentes que todavía están en la bandeja (sin ubicar) no van impresos: solo los que ya están en la placa
+    A.pads.filter(p => p.jmp || compOnBoard(p.c)).forEach(p => { s += `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="${fx(p.r * 0.75)}" fill="none" stroke="#000" stroke-width="0.15"/>`; });
+    (d.holes || []).forEach(h => { s += `<circle cx="${tx(h.x)}" cy="${ty(h.y)}" r="${fx(h.d / 2)}" fill="none" stroke="#000" stroke-width="0.15"/>`; });
     (d.texts || []).forEach(t => { if (t.layer === 'guia' && t.text) s += svgPcbText(t, tx, ty, '#000'); });
   }
   return s;
@@ -5279,6 +5547,42 @@ class PdfDoc {
     const out = new Uint8Array(len); let k = 0; parts.forEach(b => { out.set(b, k); k += b.length; });
     return out;
   }
+}
+
+/* ---------- PDF del esquemático: hoja A4 apaisada con rótulo, lista para imprimir o entregar ---------- */
+// mismos nombres que schPalette(), pero en negro sobre blanco (para imprimir)
+function schPrintPalette() {
+  return {
+    bg: '#ffffff', grid: '#ffffff', sym: '#000000', wire: '#000000', text: '#000000', muted: '#3a3a3a',
+    accent: '#000000', free: '#000000', ok: '#000000', err: '#000000', font: TEXT_FONT,
+    mono: '"JetBrains Mono", ui-monospace, Consolas, monospace', sheetGrid: '#d9dce1'
+  };
+}
+// arma un canvas con la hoja completa (rótulo, cables y componentes), en blanco y negro, lista para el PDF
+function renderSchPrintCanvas() {
+  const d = Store.doc, P = schPrintPalette(), dpmm = 12;   // ~300 ppp
+  const W = Math.round(SHEET_MM.w * dpmm), H = Math.round(SHEET_MM.h * dpmm);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+  ctx.scale(dpmm * SCH_MM, dpmm * SCH_MM);   // de acá en más, 1 unidad de esquemático = su tamaño real en la hoja
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  App.sch.drawSheet(ctx, P);
+  const wc = new Map();
+  d.wires.forEach(w => [w.a, w.b].forEach(e => { if (e.c !== undefined) { const k = e.c + ':' + e.p; wc.set(k, (wc.get(k) || 0) + 1); } }));
+  d.wires.forEach(w => {
+    const pts = wirePath(w); if (!pts || !pts.length) return;
+    ctx.strokeStyle = P.wire; ctx.lineWidth = 1.7;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.stroke();
+  });
+  d.comps.forEach(c => App.sch.drawComp(ctx, c, P, wc, [], 0));
+  return cv;
+}
+async function schPdfBytes(cv) {
+  const pdf = new PdfDoc(SHEET_MM.w, SHEET_MM.h); pdf.addPage();
+  const im = pdf.addImage(await canvasGray(cv));
+  pdf.image(im, 0, 0, SHEET_MM.w, SHEET_MM.h);
+  return pdf.output();
 }
 
 // Imagen JPEG desde un canvas (fondo blanco)
@@ -5696,6 +6000,7 @@ const App = {
     $('#bW').value = d.board.w; $('#bH').value = d.board.h;
     this.syncPour();
     document.querySelectorAll('#trackW button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.w) === d.trackW)));
+    document.querySelectorAll('#holeD button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.d) === d.holeD)));
     document.querySelectorAll('#gridSel button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.g) === pcbGrid())));
     $('#bUndo').disabled = !Store.undo.length; $('#bRedo').disabled = !Store.redo.length;
   },
@@ -5932,7 +6237,10 @@ const App = {
       <div class="row"><label class="field">Alumno<input id="propAuthor" value="${esc(d.author || '')}" maxlength="60" placeholder="Nombre y apellido"></label>
         <label class="field" style="max-width:80px">Curso<input id="propCourse" value="${esc(d.course || '')}" maxlength="20" placeholder="3.º E"></label></div>
       ${phys.length ? '<button class="btn" id="goBom" style="justify-content:center">Lista de materiales</button>' : ''}
-      <button class="btn primary" id="goPcb" style="justify-content:center">Pasar a la placa →</button></div>`;
+      <button class="btn primary" id="goPcb" style="justify-content:center">Pasar a la placa →</button></div>
+      <div class="block"><h3>Hoja del esquemático</h3>
+      <p>Se descarga en una hoja A4 apaisada, con el rótulo (proyecto, alumno y curso) abajo. Acomodá el circuito adentro del marco blanco antes de descargar.</p>
+      <button class="btn" id="schPdf" style="justify-content:center">Descargar esquemático en PDF</button></div>`;
     return html;
   },
   rightPcb() {
@@ -5959,12 +6267,25 @@ const App = {
         <p>Es un alambre que va del lado de los componentes y salta por arriba de las pistas. Uní cada punta con una pista.</p>
         <p>Al armar: pasá una pata cortada de resistencia por los dos agujeros y soldala del lado del cobre.</p>
         <div class="row"><button class="btn" id="jpDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+    } else if (s && s.type === 'hole') {
+      const h = (Store.doc.holes || []).find(h => h.id === s.id);
+      if (h) html += `<div class="block"><div class="prop-title"><b>Agujero</b><span>Ø ${fmtMM(h.d)} mm</span></div>
+        <p>Marca dónde va el centro del tornillo. No lleva cobre: perforalo con una mecha de ese diámetro después de grabar la placa.</p>
+        <label class="field">Diámetro</label>
+        <div class="seg" id="hSize">${[2.2, 3.2, 4.3, 5.3].map(v => `<button data-d="${v}" aria-pressed="${h.d === v}">${fmtMM(v)} mm</button>`).join('')}</div>
+        <div class="row"><button class="btn" id="hDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+    } else if (s && s.type === 'logo') {
+      const l = (Store.doc.logos || []).find(l => l.id === s.id);
+      if (l) html += `<div class="block"><div class="prop-title"><b>Logo</b><span>${fmtMM(Math.round(l.w * 10) / 10)} × ${fmtMM(Math.round(l.h * 10) / 10)} mm</span></div>
+        <p>Queda del lado del cobre: al planchar, el toner pasa a la placa. En pantalla se ve espejado para que en la placa terminada se lea derecho.</p>
+        <label class="field">Ancho (mm)<input type="number" id="propLogoW" min="3" max="200" step="0.5" value="${fmtMM(Math.round(l.w * 10) / 10)}"></label>
+        <div class="row" style="flex-wrap:wrap"><button class="btn" id="lgRot">Girar <kbd>R</kbd></button><button class="btn" id="lgRepl">Cambiar imagen</button><button class="btn" id="lgDel">Borrar <kbd>Supr</kbd></button></div></div>`;
     } else if (s && s.type === 'multi') {
-      const n = k => s[k].length, words = [[n('comps'), 'componente'], [n('tracks'), 'pista'], [n('texts'), 'texto'], [n('jumpers'), 'puente']]
+      const n = k => s[k].length, words = [[n('comps'), 'componente'], [n('tracks'), 'pista'], [n('texts'), 'texto'], [n('jumpers'), 'puente'], [n('holes'), 'agujero'], [n('logos'), 'logo']]
         .filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? '' : 's'}`).join(', ');
       html += `<div class="block"><div class="prop-title"><b>Selección</b><span>${words}</span></div>
         <p>Arrastrá cualquiera de los elegidos para mover todo junto. Shift + clic suma o saca uno.</p>
-        <div class="row"><button class="btn" id="mRot">Girar <kbd>R</kbd></button>${n('tracks') + n('texts') + n('jumpers') ? '<button class="btn" id="mDel">Borrar <kbd>Supr</kbd></button>' : ''}</div></div>`;
+        <div class="row"><button class="btn" id="mRot">Girar <kbd>R</kbd></button>${n('tracks') + n('texts') + n('jumpers') + n('holes') + n('logos') ? '<button class="btn" id="mDel">Borrar <kbd>Supr</kbd></button>' : ''}</div></div>`;
     } else if (s && s.type === 'track') {
       const t = Store.doc.tracks.find(t => t.id === s.id);
       if (t) html += `<div class="block"><div class="prop-title"><b>Pista</b><span>${fmtMM(t.w)} mm de ancho</span></div>
@@ -6015,6 +6336,7 @@ const App = {
     on('wDel', 'click', () => this.sch.deleteSel());
     on('goPcb', 'click', () => this.setTab('pcb'));
     on('goBom', 'click', () => this.showBom());
+    on('schPdf', 'click', () => this.schPrintDialog());
     on('pXPcb', 'click', () => this.crossHighlight('pcb'));
     on('pcbXSch', 'click', () => this.crossHighlight('sch'));
     on('pcbRot', 'click', () => this.pcb.rotateSel());
@@ -6024,6 +6346,21 @@ const App = {
     on('jpDel', 'click', () => this.pcb.deleteSel());
     on('mRot', 'click', () => this.pcb.rotateSel());
     on('mDel', 'click', () => this.pcb.deleteSel());
+    on('hDel', 'click', () => this.pcb.deleteSel());
+    document.querySelectorAll('#hSize button').forEach(b => b.addEventListener('click', () => {
+      const v = Number(b.dataset.d), s = this.pcb.sel;
+      Store.change(d => { d.holeD = v; if (s && s.type === 'hole') { const h = (d.holes || []).find(h => h.id === s.id); if (h) h.d = v; } }, 'pcb');
+    }));
+    on('lgDel', 'click', () => this.pcb.deleteSel());
+    on('lgRot', 'click', () => this.pcb.rotateSel());
+    on('lgRepl', 'click', () => { this._logoReplaceId = this.pcb.sel && this.pcb.sel.id; $('#logoFile').click(); });
+    const lw = $('#propLogoW');
+    if (lw) lw.addEventListener('change', () => {
+      const s = this.pcb.sel; if (!s || s.type !== 'logo') return;
+      const w = Math.max(3, Math.min(200, Number(lw.value) || 10));
+      Store.change(d => { const l = (d.logos || []).find(l => l.id === s.id); if (l) { l.h = l.h * w / l.w; l.w = w; } }, 'pcb');
+      lw.blur();
+    });
     const tsel = () => this.pcb.sel && this.pcb.sel.type === 'text' ? (Store.doc.texts || []).find(t => t.id === this.pcb.sel.id) : null;
     document.querySelectorAll('#tSize button').forEach(b => b.addEventListener('click', () => { const t = tsel(); if (t) Store.change(() => { t.h = Number(b.dataset.h); }, 'pcb'); }));
     document.querySelectorAll('#tLayer button').forEach(b => b.addEventListener('click', () => { const t = tsel(); if (t) Store.change(() => { t.layer = b.dataset.l; }, 'pcb'); }));
@@ -6089,6 +6426,13 @@ const App = {
       Store.change(d => { d.trackW = w; if (s && s.type === 'track') { const t = d.tracks.find(t => t.id === s.id); if (t) t.w = w; } }, 'pcb');
       this.syncFields();
     }));
+    document.querySelectorAll('#holeD button').forEach(b => b.addEventListener('click', () => {
+      const dd = Number(b.dataset.d), s = this.pcb.sel;
+      Store.change(d => { d.holeD = dd; if (s && s.type === 'hole') { const h = (d.holes || []).find(h => h.id === s.id); if (h) h.d = dd; } }, 'pcb');
+      this.syncFields();
+    }));
+    $('#bLogoTool').addEventListener('click', () => { this._logoReplaceId = null; $('#logoFile').click(); });
+    $('#logoFile').addEventListener('change', e => { this.openLogoFile(e.target.files[0]); e.target.value = ''; });
     $('#angle90Off').addEventListener('change', e => {
       this.pcb.block90 = e.target.checked;
       this.toast(e.target.checked ? 'Listo: las pistas solo pueden girar en diagonal, a 45°.' : 'Control apagado: ya podés hacer esquinas a 90°, pero no es lo que se recomienda.');
@@ -6156,6 +6500,7 @@ const App = {
         else if (k === 'b') p.setTool('board');
         else if (k === 't') p.setTool('text');
         else if (k === 'j') p.setTool('jumper');
+        else if (k === 'h') p.setTool('hole');
         else if (k === 'g') { const i = PCB_GRIDS.indexOf(pcbGrid()); this.setGrid(PCB_GRIDS[(i + 1) % PCB_GRIDS.length]); }
         else if (k === 'r') p.rotateSel();
         else if (k === 'f') { p.diagFirst = !p.diagFirst; p.draw(); }
@@ -6207,6 +6552,46 @@ const App = {
       $('#fileIn').value = '';
     };
     r.readAsText(f);
+  },
+  // Logo para el cobre: lo pasa a blanco y negro (lo oscuro queda como cobre, el resto transparente) y lo deja listo para planchar
+  openLogoFile(file) {
+    if (!file) return;
+    const replaceId = this._logoReplaceId; this._logoReplaceId = null;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const MAXPX = 900, scale = Math.min(1, MAXPX / Math.max(img.width, img.height));
+        const cw = Math.max(1, Math.round(img.width * scale)), ch = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+        const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, cw, ch);
+        const im = cx.getImageData(0, 0, cw, ch), px = im.data;
+        for (let i = 0; i < px.length; i += 4) {
+          const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+          const on = px[i + 3] > 10 && lum < 140;
+          px[i] = 0; px[i + 1] = 0; px[i + 2] = 0; px[i + 3] = on ? 255 : 0;
+        }
+        cx.putImageData(im, 0, 0);
+        const href = cv.toDataURL('image/png'), aspect = ch / cw;
+        Store.change(d => {
+          d.logos = d.logos || [];
+          if (replaceId) {
+            const l = d.logos.find(l => l.id === replaceId);
+            if (l) { l.href = href; l.h = l.w * aspect; }
+          } else {
+            const B = d.board, w = Math.max(3, Math.min(60, Math.min(B.w, B.h) * 0.4));
+            const lg = { id: Store.nid(), x: B.x + B.w / 2, y: B.y + B.h / 2, w, h: w * aspect, rot: 0, href };
+            d.logos.push(lg);
+            this.pcb.select({ type: 'logo', id: lg.id }); this.pcb.setTool('move');
+          }
+        }, 'pcb');
+        this.toast(replaceId ? 'Imagen del logo actualizada.' : 'Logo agregado: arrastralo donde quieras y ajustá el ancho a la derecha.');
+      };
+      img.onerror = () => this.toast('No se pudo leer esa imagen.');
+      img.src = reader.result;
+    };
+    reader.onerror = () => this.toast('No se pudo leer ese archivo.');
+    reader.readAsDataURL(file);
   },
   loadExample() {
     Store.load(exampleDoc()); this.pcbFitted = false; this.v3fitted = false; this.closeModal();
@@ -6506,6 +6891,40 @@ const App = {
     let ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
     ta.remove();
     this.toast(ok ? okMsg : 'No se pudo copiar automáticamente en este navegador. Usá el PDF.');
+  },
+  schPrintDialog() {
+    const m = this.modal(`<header><h2>Descargar esquemático en PDF</h2><p>Hoja A4 apaisada (297 × 210 mm), con el rótulo del proyecto abajo, como en Proteus o KiCad.</p></header>
+      <div class="body">
+        <div id="schWarn"></div>
+        <div class="preview" id="schPrev" style="max-height:min(60vh,520px)"><img id="schPrevImg" style="width:100%;display:block" alt="Vista previa de la hoja del esquemático"></div>
+        <div class="row"><button class="btn" id="schCenter">Centrar en la hoja</button></div>
+      </div>
+      <footer><button class="btn" id="schPdfCancel">Cerrar</button><button class="btn primary" id="schPdfGo">Descargar PDF</button></footer>`);
+    let cv;
+    const refresh = () => {
+      const out = schOutOfSheet();
+      m.querySelector('#schWarn').innerHTML = out
+        ? `<p style="color:var(--err);margin:0"><b>Atención:</b> el esquemático no entra en la hoja: hay componentes o cables que quedan afuera del marco blanco. Probá "Centrar en la hoja", acomodalo a mano, o descargá igual para ver cómo queda.</p>`
+        : `<p style="color:var(--ok);margin:0"><b>Listo:</b> el esquemático entra bien en la hoja.</p>`;
+      cv = renderSchPrintCanvas();
+      m.querySelector('#schPrevImg').src = cv.toDataURL('image/png');
+    };
+    refresh();
+    m.querySelector('#schPdfCancel').addEventListener('click', () => this.closeModal());
+    m.querySelector('#schCenter').addEventListener('click', () => {
+      const moved = schCenterOnSheet();
+      refresh(); this.sch.draw();
+      this.toast(moved ? 'Circuito centrado en la hoja.' : 'Ya estaba centrado.');
+    });
+    m.querySelector('#schPdfGo').addEventListener('click', async e => {
+      const b = e.currentTarget; b.disabled = true; const txt = b.textContent; b.textContent = 'Preparando…';
+      try {
+        const bytes = await schPdfBytes(cv);
+        if (await this.offerFile(`${safeName(Store.doc.name)}-esquematico.pdf`, bytes, 'application/pdf'))
+          this.toast('Se descargó el PDF del esquemático.');
+      } catch (err) { this.toast('No se pudo armar el PDF.'); }
+      b.disabled = false; b.textContent = txt;
+    });
   },
   showPrint() {
     const st = { kind: 'cobre', copies: 1 };
