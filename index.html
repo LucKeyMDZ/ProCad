@@ -5113,6 +5113,19 @@ const BOARD_STYLES = {
   fibra: { name: 'Casera (fibra de vidrio)', top: '#d3cc98', bottom: '#d3cc98', edge: '#bdb37a', mask: false }
 };
 
+// Imagen cacheada de un logo para la vista 3D (se recarga sola si cambia el href)
+const _logo3dImgs = new Map();
+function logo3dImg(l) {
+  let e = _logo3dImgs.get(l.id);
+  if (!e || e.href !== l.href) {
+    const img = new Image();
+    e = { href: l.href, img, ready: false };
+    img.onload = () => { e.ready = true; if (App.v3) { App.v3.dirty = true; App.v3.render(); } };
+    img.src = l.href;
+    _logo3dImgs.set(l.id, e);
+  }
+  return e.ready ? e.img : null;
+}
 /* ---------- textura de las caras de la placa ---------- */
 function boardTexture(side, style) {
   const d = Store.doc, B = d.board, S = BOARD_STYLES[style];
@@ -5136,6 +5149,19 @@ function boardTexture(side, style) {
       ctx.strokeStyle = S.mask ? '#2f8a50' : copper; ctx.lineWidth = t.w;
       ctx.beginPath(); ctx.moveTo(t.pts[0][0], t.pts[0][1]); t.pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.stroke();
     });
+    // logos: van del lado del cobre; se espejan porque la cara de abajo se mira desde abajo en la vista 3D
+    (d.logos || []).forEach(l => {
+      const img = logo3dImg(l); if (!img) return;
+      const tmp = document.createElement('canvas'); tmp.width = img.naturalWidth; tmp.height = img.naturalHeight;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(img, 0, 0);
+      tctx.globalCompositeOperation = 'source-in';
+      tctx.fillStyle = S.mask ? tin : copper;
+      tctx.fillRect(0, 0, tmp.width, tmp.height);
+      ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.rot * Math.PI / 2); ctx.scale(-1, 1);
+      ctx.drawImage(tmp, -l.w / 2, -l.h / 2, l.w, l.h);
+      ctx.restore();
+    });
   }
   A.pads.forEach(p => {
     if (side === 'bottom' || S.mask) {
@@ -5145,6 +5171,8 @@ function boardTexture(side, style) {
     }
     ctx.fillStyle = '#0d0d0d'; ctx.beginPath(); ctx.arc(p.x, p.y, p.pad.dr / 2, 0, 7); ctx.fill();
   });
+  // agujeros de montaje: se ven de los dos lados, igual que un agujero perforado de verdad
+  (d.holes || []).forEach(h => { ctx.fillStyle = '#0d0d0d'; ctx.beginPath(); ctx.arc(h.x, h.y, h.d / 2, 0, 7); ctx.fill(); });
   if (side === 'top' && S.mask) {
     (d.texts || []).forEach(t => { if (t.layer === 'guia' && t.text) drawPcbText(ctx, t, '#f4f4ef'); });
     ctx.strokeStyle = '#f4f4ef'; ctx.lineWidth = 0.18;

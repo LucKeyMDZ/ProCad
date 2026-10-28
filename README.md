@@ -58,6 +58,7 @@ Entrá a este enlace y empezá a diseñar:
 - 🖨️ **Agujeros y logos más visibles al imprimir:** los agujeros de montaje ahora se marcan con un círculo más grueso y una cruz en el centro, y quedan junto con los logos en la misma capa que las pistas al imprimir o descargar el PDF.
 - 🎨 **Logos con fondo oscuro, corregidos:** si tu logo tiene el fondo oscuro y el dibujo claro (al revés de lo más común), antes quedaba invertido — se grababa el fondo como cobre y se borraba el dibujo. Ahora se detecta solo, y si se equivoca hay un botón "Invertir colores" para corregirlo sin tener que subir la imagen de nuevo.
 - 🕳️ **Agujeros y logos ya no desaparecen con el plano de cobre:** si tenías "Rellenar la placa con cobre" activado, el relleno tapaba por completo el agujero y el logo (quedaban del mismo color, sin contraste). Ahora cada uno despeja su propio huequito blanco en el relleno antes de dibujarse, como un alivio real en una placa.
+- 🧊 **Agujeros y logos, ahora también en la Vista 3D:** antes solo se veían en la placa (paso 2) y al imprimir; ahora la Vista 3D también muestra el agujero perforado y el logo sobre el cobre, para hacerte una idea real de cómo va a quedar la placa terminada.
 
 ### Novedades anteriores (27/10/2026)
 
