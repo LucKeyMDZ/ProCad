@@ -5329,7 +5329,9 @@ const fx = n => (Math.round(n * 1000) / 1000).toString();
 // Marca de un agujero de montaje para imprimir: círculo bien grueso + una cruz chica en el centro (se ve bien al imprimir)
 function svgHoleMark(h, tx, ty) {
   const r = h.d / 2, cx = Number(tx(h.x)), cy = Number(ty(h.y)), k = Math.min(1.2, r * 0.35);
-  return `<circle cx="${fx(cx)}" cy="${fx(cy)}" r="${fx(r)}" fill="none" stroke="#000" stroke-width="0.3"/>` +
+  // despeja un hueco blanco alrededor (como un alivio real): si no, el relleno de cobre lo tapa y queda invisible
+  return `<circle cx="${fx(cx)}" cy="${fx(cy)}" r="${fx(r + 0.6)}" fill="#fff"/>` +
+    `<circle cx="${fx(cx)}" cy="${fx(cy)}" r="${fx(r)}" fill="none" stroke="#000" stroke-width="0.3"/>` +
     `<line x1="${fx(cx - k)}" y1="${fx(cy)}" x2="${fx(cx + k)}" y2="${fx(cy)}" stroke="#000" stroke-width="0.25" stroke-linecap="round"/>` +
     `<line x1="${fx(cx)}" y1="${fx(cy - k)}" x2="${fx(cx)}" y2="${fx(cy + k)}" stroke="#000" stroke-width="0.25" stroke-linecap="round"/>`;
 }
@@ -5344,8 +5346,11 @@ function svgBoard(kind, ox, oy) {
       const url = pourImage(R, '#000').toDataURL('image/png');
       s += `<image href="${url}" x="${tx(R.B.x)}" y="${ty(R.B.y)}" width="${fx(R.W / R.res)}" height="${fx(R.H / R.res)}" preserveAspectRatio="none"/>`;
     }
-    // logos: espejados como el texto en cobre, para que al planchar queden derechos en la placa
+    // logos: espejados como el texto en cobre, para que al planchar queden derechos en la placa.
+    // Primero despeja un rectángulo blanco (si no, un plano de cobre relleno lo tapa y queda invisible).
     (d.logos || []).forEach(l => {
+      const pad = 1;
+      s += `<rect x="${fx(-l.w / 2 - pad)}" y="${fx(-l.h / 2 - pad)}" width="${fx(l.w + 2 * pad)}" height="${fx(l.h + 2 * pad)}" fill="#fff" transform="translate(${tx(l.x)} ${ty(l.y)}) rotate(${l.rot * 90})"/>`;
       s += `<image href="${l.href}" x="${fx(-l.w / 2)}" y="${fx(-l.h / 2)}" width="${fx(l.w)}" height="${fx(l.h)}" preserveAspectRatio="none" transform="translate(${tx(l.x)} ${ty(l.y)}) rotate(${l.rot * 90}) scale(-1 1)"/>`;
     });
     (d.texts || []).forEach(t => { if (t.layer === 'cobre' && t.text) s += svgPcbText(t, tx, ty, '#000'); });
