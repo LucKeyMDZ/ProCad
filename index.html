@@ -2469,9 +2469,10 @@ const PCB_GRIDS = [2.54, 1.27, 0.635, 0.25, 0.1];
 function pcbGrid() { const g = Store.doc && Store.doc.pcbGrid; return g > 0 ? g : 1.27; }
 
 /* ---------- hoja del esquemático: A4 apaisada con rótulo abajo (como Proteus o KiCad) ---------- */
-const SCH_MM = 0.5;                                    // mm reales por unidad de esquemático, al imprimir
 const SHEET_MM = { w: 297, h: 210, margin: 10, title: 26 };  // hoja A4 apaisada, margen y alto del rótulo, en mm
-const mmU = v => v / SCH_MM;                           // mm -> unidades de esquemático
+// mm reales por unidad de esquemático, al imprimir: "Chico/Normal/Grande" lo ajusta y se guarda en el proyecto
+function schScale() { const s = Store.doc && Store.doc.schScale; return s > 0 ? s : 0.5; }
+const mmU = v => v / schScale();                       // mm -> unidades de esquemático
 function sheetRectU() { return [0, 0, mmU(SHEET_MM.w), mmU(SHEET_MM.h)]; }
 // adentro del marco, arriba del rótulo: ahí tiene que entrar el circuito
 function sheetUsableU() {
@@ -2533,6 +2534,7 @@ function emptyDoc() {
     pour: { on: false, net: 'GND', style: 'solido', clr: 0.8, thermal: true },
     trackW: 1.0,
     holeD: 3.2,
+    schScale: 0.5,         // mm por unidad de esquemático al imprimir (más chico = entra más circuito en la hoja)
     bom: { boards: 1, extras: true, prices: {} },   // lista de materiales: placas a armar y precios anotados
     seq: 1
   };
@@ -2890,6 +2892,7 @@ function migrateDoc(d) {
   if (!Array.isArray(d.holes)) d.holes = [];
   if (!Array.isArray(d.logos)) d.logos = [];
   if (!d.holeD) d.holeD = 3.2;
+  if (!(d.schScale > 0)) d.schScale = 0.5;
   d.wires.forEach(w => {
     if (!w.pts) {
       const a = endPos(w.a), b = endPos(w.b);
@@ -2965,11 +2968,14 @@ function drawTip(ctx, sx, sy, text, view) {
    ProCad — Editor de esquemático
    ===================================================================== */
 
+// La hoja del esquemático es siempre blanca (como el papel), así que los colores de los símbolos
+// no se leen del tema oscuro/claro de la app: son los mismos fijos que ya usaba el tema claro,
+// pensados para leerse bien sobre blanco.
 function schPalette() {
   return {
-    bg: cssv('--sch-bg'), grid: cssv('--sch-grid'), sym: cssv('--sch-sym'), wire: cssv('--sch-wire'),
-    text: cssv('--sch-text'), muted: cssv('--sch-muted'), accent: cssv('--select'), free: cssv('--pin-free'),
-    ok: cssv('--ok'), err: cssv('--err'), font: cssv('--font-ui'), mono: cssv('--font-mono'), sheetGrid: '#d9dce1'
+    bg: '#ffffff', grid: '#d9dce1', sym: '#93241f', wire: '#157a40',
+    text: '#1f49a8', muted: '#4d5c53', accent: '#0a6ba3', free: '#b4262a',
+    ok: '#157a4c', err: '#b4262a', font: cssv('--font-ui'), mono: cssv('--font-mono'), sheetGrid: '#d9dce1'
   };
 }
 const samePt = (a, b) => a && b && a[0] === b[0] && a[1] === b[1];
@@ -3178,8 +3184,6 @@ class SchEditor {
   drawSheet(ctx, P) {
     const [x0, y0, x1, y1] = sheetRectU();
     ctx.fillStyle = '#ffffff'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-    ctx.fillStyle = P.sheetGrid;
-    for (let x = x0; x <= x1 + 0.01; x += GRID) for (let y = y0; y <= y1 + 0.01; y += GRID) ctx.fillRect(x - 0.55, y - 0.55, 1.1, 1.1);
     const m = mmU(SHEET_MM.margin), t = mmU(SHEET_MM.title);
     ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = 0.8; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.3;
@@ -3503,11 +3507,11 @@ class SchEditor {
   render() {
     const v = this.v, P = schPalette(), d = Store.doc;
     let ctx = v.screenCtx();
-    ctx.fillStyle = P.bg; ctx.fillRect(0, 0, v.w, v.h);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, v.w, v.h);
 
     // grilla de puntos
     if (v.z * GRID >= 7) {
-      ctx.fillStyle = P.grid;
+      ctx.fillStyle = P.sheetGrid;
       const step = GRID * v.z, ox = ((v.tx % step) + step) % step, oy = ((v.ty % step) + step) % step;
       const big = step < 14 ? 2 : 1;
       for (let x = ox; x < v.w; x += step * big) for (let y = oy; y < v.h; y += step * big) ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
@@ -5322,6 +5326,13 @@ class View3D {
 
 const fx = n => (Math.round(n * 1000) / 1000).toString();
 
+// Marca de un agujero de montaje para imprimir: círculo bien grueso + una cruz chica en el centro (se ve bien al imprimir)
+function svgHoleMark(h, tx, ty) {
+  const r = h.d / 2, cx = Number(tx(h.x)), cy = Number(ty(h.y)), k = Math.min(1.2, r * 0.35);
+  return `<circle cx="${fx(cx)}" cy="${fx(cy)}" r="${fx(r)}" fill="none" stroke="#000" stroke-width="0.3"/>` +
+    `<line x1="${fx(cx - k)}" y1="${fx(cy)}" x2="${fx(cx + k)}" y2="${fx(cy)}" stroke="#000" stroke-width="0.25" stroke-linecap="round"/>` +
+    `<line x1="${fx(cx)}" y1="${fx(cy - k)}" x2="${fx(cx)}" y2="${fx(cy + k)}" stroke="#000" stroke-width="0.25" stroke-linecap="round"/>`;
+}
 // Dibujo de una copia de la placa, en mm, con origen en (ox, oy)
 function svgBoard(kind, ox, oy) {
   const d = Store.doc, B = d.board, A = pcbAnalyze();
@@ -5349,8 +5360,8 @@ function svgBoard(kind, ox, oy) {
       // punto blanco para centrar la mecha al agujerear
       s += `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="0.3" fill="#fff"/>`;
     });
-    // agujeros de montaje: solo un círculo de referencia fino (no llevan cobre), para ubicar la mecha después de grabar
-    (d.holes || []).forEach(h => { s += `<circle cx="${tx(h.x)}" cy="${ty(h.y)}" r="${fx(h.d / 2)}" fill="none" stroke="#000" stroke-width="0.12"/>`; });
+    // agujeros de montaje: círculo de referencia (no llevan cobre) + una cruz en el centro, para que se vean bien al imprimir
+    (d.holes || []).forEach(h => { s += svgHoleMark(h, tx, ty); });
   } else {
     d.comps.forEach(c => {
       const part = partOf(c); if (!part.fp || !compOnBoard(c)) return;
@@ -5367,7 +5378,7 @@ function svgBoard(kind, ox, oy) {
     });
     // los componentes que todavía están en la bandeja (sin ubicar) no van impresos: solo los que ya están en la placa
     A.pads.filter(p => p.jmp || compOnBoard(p.c)).forEach(p => { s += `<circle cx="${tx(p.x)}" cy="${ty(p.y)}" r="${fx(p.r * 0.75)}" fill="none" stroke="#000" stroke-width="0.15"/>`; });
-    (d.holes || []).forEach(h => { s += `<circle cx="${tx(h.x)}" cy="${ty(h.y)}" r="${fx(h.d / 2)}" fill="none" stroke="#000" stroke-width="0.15"/>`; });
+    (d.holes || []).forEach(h => { s += svgHoleMark(h, tx, ty); });
     (d.texts || []).forEach(t => { if (t.layer === 'guia' && t.text) s += svgPcbText(t, tx, ty, '#000'); });
   }
   return s;
@@ -5565,7 +5576,7 @@ function renderSchPrintCanvas() {
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-  ctx.scale(dpmm * SCH_MM, dpmm * SCH_MM);   // de acá en más, 1 unidad de esquemático = su tamaño real en la hoja
+  ctx.scale(dpmm * schScale(), dpmm * schScale());   // de acá en más, 1 unidad de esquemático = su tamaño real en la hoja
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   App.sch.drawSheet(ctx, P);
   const wc = new Map();
@@ -6240,6 +6251,9 @@ const App = {
       <button class="btn primary" id="goPcb" style="justify-content:center">Pasar a la placa →</button></div>
       <div class="block"><h3>Hoja del esquemático</h3>
       <p>Se descarga en una hoja A4 apaisada, con el rótulo (proyecto, alumno y curso) abajo. Acomodá el circuito adentro del marco blanco antes de descargar.</p>
+      <label class="field">Tamaño de los símbolos en la hoja</label>
+      <div class="seg" id="schScaleSel">${[['0.35', 'Chico'], ['0.5', 'Normal'], ['0.65', 'Grande']].map(([v, t]) => `<button data-s="${v}" aria-pressed="${Number(v) === (d.schScale || 0.5)}">${t}</button>`).join('')}</div>
+      <p>Si el circuito no entra en la hoja, probá "Chico": deja más lugar sin cambiar el circuito.</p>
       <button class="btn" id="schPdf" style="justify-content:center">Descargar esquemático en PDF</button></div>`;
     return html;
   },
@@ -6337,6 +6351,9 @@ const App = {
     on('goPcb', 'click', () => this.setTab('pcb'));
     on('goBom', 'click', () => this.showBom());
     on('schPdf', 'click', () => this.schPrintDialog());
+    document.querySelectorAll('#schScaleSel button').forEach(b => b.addEventListener('click', () => {
+      Store.change(d => { d.schScale = Number(b.dataset.s); }, 'doc'); this.sch.draw();
+    }));
     on('pXPcb', 'click', () => this.crossHighlight('pcb'));
     on('pcbXSch', 'click', () => this.crossHighlight('sch'));
     on('pcbRot', 'click', () => this.pcb.rotateSel());
@@ -6897,15 +6914,22 @@ const App = {
       <div class="body">
         <div id="schWarn"></div>
         <div class="preview" id="schPrev" style="max-height:min(60vh,520px)"><img id="schPrevImg" style="width:100%;display:block" alt="Vista previa de la hoja del esquemático"></div>
+        <label class="field">Tamaño de los símbolos en la hoja</label>
+        <div class="seg" id="schScaleSel2"></div>
         <div class="row"><button class="btn" id="schCenter">Centrar en la hoja</button></div>
       </div>
       <footer><button class="btn" id="schPdfCancel">Cerrar</button><button class="btn primary" id="schPdfGo">Descargar PDF</button></footer>`);
     let cv;
+    const SCALES = [['0.35', 'Chico'], ['0.5', 'Normal'], ['0.65', 'Grande']];
     const refresh = () => {
       const out = schOutOfSheet();
       m.querySelector('#schWarn').innerHTML = out
-        ? `<p style="color:var(--err);margin:0"><b>Atención:</b> el esquemático no entra en la hoja: hay componentes o cables que quedan afuera del marco blanco. Probá "Centrar en la hoja", acomodalo a mano, o descargá igual para ver cómo queda.</p>`
+        ? `<p style="color:var(--err);margin:0"><b>Atención:</b> el esquemático no entra en la hoja: hay componentes o cables que quedan afuera del marco blanco. Probá achicar el tamaño, "Centrar en la hoja", o descargá igual para ver cómo queda.</p>`
         : `<p style="color:var(--ok);margin:0"><b>Listo:</b> el esquemático entra bien en la hoja.</p>`;
+      m.querySelector('#schScaleSel2').innerHTML = SCALES.map(([v, t]) => `<button data-s="${v}" aria-pressed="${Number(v) === schScale()}">${t}</button>`).join('');
+      m.querySelectorAll('#schScaleSel2 button').forEach(b => b.addEventListener('click', () => {
+        Store.change(d => { d.schScale = Number(b.dataset.s); }, 'doc'); this.sch.draw(); refresh();
+      }));
       cv = renderSchPrintCanvas();
       m.querySelector('#schPrevImg').src = cv.toDataURL('image/png');
     };

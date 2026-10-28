@@ -51,7 +51,13 @@ Entrá a este enlace y empezá a diseñar:
 
 ---
 
-## 🆕 Novedades (27/10/2026)
+## 🆕 Novedades (28/10/2026)
+
+- ⚪ **Hoja del esquemático en blanco:** se acabó el fondo negro detrás de la hoja — ahora todo el lienzo del esquemático es blanco, con colores de símbolos y cables pensados para leerse bien sobre blanco.
+- 🔍 **Tamaño ajustable para imprimir:** nuevo control "Chico / Normal / Grande" para el tamaño de los símbolos en la hoja. Si el circuito es grande y no entra, "Chico" deja más lugar sin tener que tocar el diseño.
+- 🖨️ **Agujeros y logos más visibles al imprimir:** los agujeros de montaje ahora se marcan con un círculo más grueso y una cruz en el centro, y quedan junto con los logos en la misma capa que las pistas al imprimir o descargar el PDF.
+
+### Novedades anteriores (27/10/2026)
 
 - 🧷 **Las pistas ya no se despegan:** si movés o girás un componente de la placa, las pistas conectadas a sus pads ahora se acomodan solas para seguir pegadas (antes quedaban colgando en el lugar viejo).
 - 🚧 **No se puede rutear fuera de la placa:** al dibujar una pista, si el próximo tramo se saldría del rectángulo verde, se bloquea y avisa (como ya pasaba con las esquinas a 90°).
