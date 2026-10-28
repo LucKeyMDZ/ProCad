@@ -6293,7 +6293,8 @@ const App = {
       if (l) html += `<div class="block"><div class="prop-title"><b>Logo</b><span>${fmtMM(Math.round(l.w * 10) / 10)} × ${fmtMM(Math.round(l.h * 10) / 10)} mm</span></div>
         <p>Queda del lado del cobre: al planchar, el toner pasa a la placa. En pantalla se ve espejado para que en la placa terminada se lea derecho.</p>
         <label class="field">Ancho (mm)<input type="number" id="propLogoW" min="3" max="200" step="0.5" value="${fmtMM(Math.round(l.w * 10) / 10)}"></label>
-        <div class="row" style="flex-wrap:wrap"><button class="btn" id="lgRot">Girar <kbd>R</kbd></button><button class="btn" id="lgRepl">Cambiar imagen</button><button class="btn" id="lgDel">Borrar <kbd>Supr</kbd></button></div></div>`;
+        <p>¿Quedó al revés (el fondo en negro y el dibujo transparente)? Tocá "Invertir colores".</p>
+        <div class="row" style="flex-wrap:wrap"><button class="btn" id="lgRot">Girar <kbd>R</kbd></button><button class="btn" id="lgInvert">Invertir colores</button><button class="btn" id="lgRepl">Cambiar imagen</button><button class="btn" id="lgDel">Borrar <kbd>Supr</kbd></button></div></div>`;
     } else if (s && s.type === 'multi') {
       const n = k => s[k].length, words = [[n('comps'), 'componente'], [n('tracks'), 'pista'], [n('texts'), 'texto'], [n('jumpers'), 'puente'], [n('holes'), 'agujero'], [n('logos'), 'logo']]
         .filter(([c]) => c).map(([c, w]) => `${c} ${w}${c === 1 ? '' : 's'}`).join(', ');
@@ -6370,6 +6371,7 @@ const App = {
     }));
     on('lgDel', 'click', () => this.pcb.deleteSel());
     on('lgRot', 'click', () => this.pcb.rotateSel());
+    on('lgInvert', 'click', () => { const s = this.pcb.sel; if (s && s.type === 'logo') this.invertLogo(s.id); });
     on('lgRepl', 'click', () => { this._logoReplaceId = this.pcb.sel && this.pcb.sel.id; $('#logoFile').click(); });
     const lw = $('#propLogoW');
     if (lw) lw.addEventListener('change', () => {
@@ -6583,9 +6585,17 @@ const App = {
         const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
         const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, cw, ch);
         const im = cx.getImageData(0, 0, cw, ch), px = im.data;
+        // el dibujo (lo que va a quedar como cobre) casi siempre es la minoría de los píxeles:
+        // letras oscuras sobre fondo claro, o letras claras sobre fondo oscuro, da lo mismo
+        let dark = 0, light = 0;
         for (let i = 0; i < px.length; i += 4) {
-          const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-          const on = px[i + 3] > 10 && lum < 140;
+          if (px[i + 3] <= 10) continue;
+          if (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2] < 140) dark++; else light++;
+        }
+        const keepDark = dark <= light;
+        for (let i = 0; i < px.length; i += 4) {
+          const isDark = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2] < 140;
+          const on = px[i + 3] > 10 && (keepDark ? isDark : !isDark);
           px[i] = 0; px[i + 1] = 0; px[i + 2] = 0; px[i + 3] = on ? 255 : 0;
         }
         cx.putImageData(im, 0, 0);
@@ -6609,6 +6619,22 @@ const App = {
     };
     reader.onerror = () => this.toast('No se pudo leer ese archivo.');
     reader.readAsDataURL(file);
+  },
+  // Por si el logo quedó al revés (se guardó como cobre el fondo en vez del dibujo): invierte lo transparente y lo opaco
+  invertLogo(id) {
+    const l = (Store.doc.logos || []).find(l => l.id === id); if (!l) return;
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0);
+      const im = cx.getImageData(0, 0, cv.width, cv.height), px = im.data;
+      for (let i = 3; i < px.length; i += 4) px[i] = 255 - px[i];
+      cx.putImageData(im, 0, 0);
+      const href = cv.toDataURL('image/png');
+      Store.change(d => { const ll = (d.logos || []).find(x => x.id === id); if (ll) ll.href = href; }, 'pcb');
+      this.toast('Logo invertido.');
+    };
+    img.src = l.href;
   },
   loadExample() {
     Store.load(exampleDoc()); this.pcbFitted = false; this.v3fitted = false; this.closeModal();

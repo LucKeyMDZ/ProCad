@@ -56,6 +56,7 @@ Entrá a este enlace y empezá a diseñar:
 - ⚪ **Hoja del esquemático en blanco:** se acabó el fondo negro detrás de la hoja — ahora todo el lienzo del esquemático es blanco, con colores de símbolos y cables pensados para leerse bien sobre blanco.
 - 🔍 **Tamaño ajustable para imprimir:** nuevo control "Chico / Normal / Grande" para el tamaño de los símbolos en la hoja. Si el circuito es grande y no entra, "Chico" deja más lugar sin tener que tocar el diseño.
 - 🖨️ **Agujeros y logos más visibles al imprimir:** los agujeros de montaje ahora se marcan con un círculo más grueso y una cruz en el centro, y quedan junto con los logos en la misma capa que las pistas al imprimir o descargar el PDF.
+- 🎨 **Logos con fondo oscuro, corregidos:** si tu logo tiene el fondo oscuro y el dibujo claro (al revés de lo más común), antes quedaba invertido — se grababa el fondo como cobre y se borraba el dibujo. Ahora se detecta solo, y si se equivoca hay un botón "Invertir colores" para corregirlo sin tener que subir la imagen de nuevo.
 
 ### Novedades anteriores (27/10/2026)
 
